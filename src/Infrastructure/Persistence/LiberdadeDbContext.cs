@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 
-namespace Infraestructure.Data
+namespace Infrastructure.Persistence
 {
 
     public class LiberdadeDbContext : DbContext

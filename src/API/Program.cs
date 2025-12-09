@@ -1,5 +1,5 @@
-using Infraestructure.Data;
-using Infraestructure.Data.SeedData;
+using Infrastructure.Persistence;
+using Infrastructure.Persistence.SeedData;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

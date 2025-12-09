@@ -1,7 +1,8 @@
 using Core.Entities;
 using Core.Enums;
+using Infrastructure.Persistence;
 
-namespace Infraestructure.Data.SeedData
+namespace Infrastructure.Persistence.SeedData
 {
     public static class SeedData
     {
