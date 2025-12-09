@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,12 +18,20 @@ builder.Services.AddDbContext<LiberdadeDbContext>(options =>
 
 var app = builder.Build();
 
-// Seed the database
+// Migrate and Seed the database
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<LiberdadeDbContext>();
-    SeedData.Seed(context);
+    try
+    {
+        var context = services.GetRequiredService<LiberdadeDbContext>();
+        context.Database.Migrate();
+        SeedData.Seed(context);
+    }
+    catch (Exception ex)
+    {
+        throw new Exception("An error occurred while migrating or seeding the database.", ex);
+    }
 }
 
 // Configure the HTTP request pipeline.

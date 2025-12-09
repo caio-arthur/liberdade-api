@@ -13,7 +13,7 @@ namespace Infrastructure.Persistence.Configurations
             builder.Property(p => p.Categoria)
                    .HasConversion<string>();
 
-            builder.Property(p => p.ValorTotalAtual).HasPrecision(18, 2);
+            builder.Ignore(x => x.ValorTotalAtual);
         }
     }
 }

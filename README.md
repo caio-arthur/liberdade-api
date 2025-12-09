@@ -1,1 +1,1 @@
-dotnet ef migrations add InitialCreate --project src\Infrastructure --startup-project src\API --output-dir src\Infrastructure\Migrations
+dotnet ef migrations add "InitialCreate" -p src/Infrastructure -s src/API -o Migrations
