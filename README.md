@@ -1,4 +1,4 @@
-# PROJETO: SISTEMA DE GESTÃO FINANCEIRA (LIBERDADE FINANCEIRA)
+# SISTEMA DE GESTÃO FINANCEIRA
 
 **Data do Snapshot:** 09/12/2025  
 **Estado Atual:** Camada de Domínio e Infraestrutura configuradas. Migração inicial criada.
