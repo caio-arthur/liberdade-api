@@ -1,4 +1,6 @@
-﻿using Application.Common.Interfaces;
+﻿using Application.Common.Exceptions;
+using Application.Common.Interfaces;
+using Application.Handlers.Ativos.Responses;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,8 +16,7 @@ namespace Application.Handlers.Ativos.Commands.Create
 
             RuleFor(x => x.Codigo)
                 .NotEmpty().WithMessage("O código do ativo é obrigatório.")
-                .MustAsync(BeUniqueCodigo).WithMessage("Já existe um ativo cadastrado com este código.");
-
+                .MustAsync(BeUniqueCodigo);
 
             RuleFor(x => x.Nome)
                 .NotEmpty().WithMessage("O nome do ativo é obrigatório.")
@@ -28,7 +29,12 @@ namespace Application.Handlers.Ativos.Commands.Create
 
         private async Task<bool> BeUniqueCodigo(string codigo, CancellationToken cancellationToken)
         {
-            return !await _context.Ativos.AnyAsync(a => a.Codigo == codigo, cancellationToken);
+            var exists = await _context.Ativos.AnyAsync(a => a.Codigo == codigo, cancellationToken);
+            if (exists)
+            {
+                throw new ValidationsException(AtivoErrors.CodigoExists(codigo));
+            }
+            return true;
         }
     }
 

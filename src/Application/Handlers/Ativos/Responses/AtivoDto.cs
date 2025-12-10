@@ -1,9 +1,10 @@
-﻿using Application.Common.Helpers;
+﻿using Application.Common.DTOs;
+using Application.Common.Helpers;
 using Application.Common.Interfaces;
 using AutoMapper;
 using Core.Entities;
 
-namespace Application.Common.DTOs
+namespace Application.Handlers.Ativos.Responses
 {
     public class AtivoDto : IMapFrom<Ativo>
     {

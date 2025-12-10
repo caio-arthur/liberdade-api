@@ -1,7 +1,7 @@
-using Application.Common.DTOs;
 using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.Common.Wrappers;
+using Application.Handlers.Ativos.Responses;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Core.Enums;

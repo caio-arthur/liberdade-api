@@ -1,3 +1,4 @@
+using API.ExceptionHandlers;
 using Application;
 using Infrastructure;
 using Infrastructure.Persistence;
@@ -16,8 +17,12 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 // Migrate and Seed the database
 using (var scope = app.Services.CreateScope())
@@ -42,6 +47,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseHttpsRedirection(); 
 app.MapControllers();
 
 app.Run();
