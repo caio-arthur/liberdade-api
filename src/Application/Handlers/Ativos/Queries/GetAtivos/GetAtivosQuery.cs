@@ -1,9 +1,10 @@
+using Application.Common.DTOs;
 using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.Common.Wrappers;
-using Application.Handlers.Ativos.DTOs;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using Core.Enums;
 using Gridify;
 using Gridify.EntityFramework;
 using Microsoft.EntityFrameworkCore;

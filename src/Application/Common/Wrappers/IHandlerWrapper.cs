@@ -8,4 +8,9 @@ namespace Application.Common.Wrappers
         where TRequest : IRequestWrapper<TResponse>
     {
     }
+
+    public interface IHandlerWrapper<in TRequest> : IRequestHandler<TRequest, Response>
+        where TRequest : IRequestWrapper
+    {
+    }
 }

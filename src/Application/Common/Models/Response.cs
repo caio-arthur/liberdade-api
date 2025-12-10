@@ -1,7 +1,26 @@
 namespace Application.Common.Models
 {
-    public static class Response 
+    public class Response 
     {
+        public bool Sucesso { get; }
+        public Error Erro { get; }
+
+        protected Response(bool success, Error error)
+        {
+            Sucesso = success;
+            Erro = error;
+        }
+
+        public static Response Failure(Error error)
+        {
+            return new Response(false, error);
+        }
+
+        public static Response Success()
+        {
+            return new Response(true, null);
+        }
+
         public static Response<TData> Failure<TData>(Error error)
         {
             return new Response<TData>(false, default, error);
@@ -13,16 +32,13 @@ namespace Application.Common.Models
         }
     }
 
-    public class Response<TData>
+    public class Response<TData> : Response
     {
-        public bool Sucesso { get; }
         public TData Dados { get; }
-        public Error Erro { get; }
-        public Response(bool isSuccess, TData data, Error error)
+
+        public Response(bool isSuccess, TData data, Error error) : base(isSuccess, error)
         {
-            Sucesso = isSuccess;
             Dados = data;
-            Erro = error;
         }
     }
 }

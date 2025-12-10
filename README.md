@@ -150,19 +150,11 @@ public class PosicaoCarteiraConfiguration : IEntityTypeConfiguration<PosicaoCart
 
 ## 5. Próximos Passos (Roadmap de Implementação)
 
-**Imediato (Próxima Sessão)**
-
-##### Fase 1: Setup da Camada Application (Imediato)
-- Criar projeto Liberdade.Application. (feito)
-- Instalar pacotes: MediatR, FluentValidation, Gridify. (feito)
-- Estrutura de pastas: Application/Handlers, Commands, Queries, DTOs, Validators. (feito)
-- Configurar Injeção de Dependência em API. (feito)
-
-#### Fase 2: Implementação de Features (CQRS)
+#### Implementação de Features (CQRS)
 
 Feature Ativos:
-- CreateAtivoCommand: Cadastrar Tesouro Selic/FIIs.
-- GetAtivosQuery: Listagem com Gridify.
+- CreateAtivoCommand: Cadastrar Tesouro Selic/FIIs. (feito)
+- GetAtivosQuery: Listagem com Gridify. (feito)
 
 Feature Transações:
 - RegistrarAporteCommand: Entrada de Caixa.

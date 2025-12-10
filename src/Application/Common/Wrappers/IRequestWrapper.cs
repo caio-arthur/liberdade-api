@@ -7,4 +7,8 @@ namespace Application.Common.Wrappers
     {
     }
 
+    public interface IRequestWrapper : IRequest<Response>
+    {
+    }
+
 }

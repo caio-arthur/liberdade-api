@@ -2,11 +2,11 @@
 {
     public enum AtivoCategoria
     {
-        RendaFixaLiquidez,   // Tesouro Selic / CDB Liquidez Diária
-        FiiPapel,            // FII de Recebíveis
-        FiiTijoloLogistica,  // FII Tijolo (Logística)
-        FiiTijoloShopping,   // FII Tijolo (Shopping)
-        FiiHibrido,          // FII Misto / Híbrido
-        Acoes                // Ações
+        RendaFixaLiquidez = 1,   // Tesouro Selic / CDB Liquidez Diária
+        FiiPapel = 2,            // FII de Recebíveis
+        FiiTijoloLogistica = 3,  // FII Tijolo (Logística)
+        FiiTijoloShopping = 4,   // FII Tijolo (Shopping)
+        FiiHibrido = 5,          // FII Misto / Híbrido
+        Acoes = 6                // Ações
     }
 }
