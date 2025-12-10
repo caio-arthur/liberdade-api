@@ -1,3 +1,5 @@
+using Application;
+using Infrastructure;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.SeedData;
 using Microsoft.AspNetCore.Builder;
@@ -10,11 +12,11 @@ using System;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-builder.Services.AddDbContext<LiberdadeDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("SqliteConnection")));
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -40,5 +42,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.MapControllers();
 
 app.Run();

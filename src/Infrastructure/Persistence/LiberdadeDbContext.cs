@@ -1,11 +1,12 @@
-﻿using Core.Entities;
+﻿using Application.Common.Interfaces;
+using Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 
 namespace Infrastructure.Persistence
 {
 
-    public class LiberdadeDbContext : DbContext
+    public class LiberdadeDbContext : DbContext, IApplicationDbContext
     {
         public LiberdadeDbContext(DbContextOptions<LiberdadeDbContext> options) : base(options)
         {

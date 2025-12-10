@@ -1,54 +1,32 @@
-# SISTEMA DE GESTÃO FINANCEIRA
-
-**Data do Snapshot:** 09/12/2025  
-**Estado Atual:** Camada de Domínio e Infraestrutura configuradas. Migração inicial criada.
-
----
+# PROJETO: SISTEMA DE GESTÃO FINANCEIRA (LIBERDADE FINANCEIRA)
+Data do Snapshot: 09/12/2025
+Estado Atual: Camada de Domínio e Infraestrutura configuradas. Migração Inicial criada. Decisão arquitetural por CQRS definida.
 
 ## 1. Visão Geral e Regras de Negócio
+O sistema visa gerenciar a evolução patrimonial pessoal focada em três etapas:
+1.  **Etapa 1 (Acumulação):** Aportes mensais (~R$ 1500) + Saldo Inicial em Renda Fixa (Tesouro Selic 2031) até que os rendimentos paguem o aluguel (Meta: R$ 600/mês).
+2.  **Etapa 2 (Transição/Renda):** Migração gradual para FIIs (Papel e Tijolo) para gerar renda mensal isenta.
+3.  **Etapa 3 (Risco):** Uso da renda excedente para empreendedorismo.
 
-O sistema visa gerenciar a evolução patrimonial pessoal, estruturada em **três etapas**:
+**Requisito Chave:** O sistema deve possuir "Rebalanceamento Inteligente", sugerindo quando vender Selic e comprar FIIs baseado na *MetaAlocacao* da fase atual.
 
-### Etapas do Processo
+## 2. Stack Tecnológica e Padrões
+* **Framework:** .NET 8 (Minimal API)
+* **Arquitetura:** Clean Architecture + CQRS
+* **Padrão de Mensageria:** Mediator (via biblioteca **MediatR**)
+* **Filtros Dinâmicos:** **Gridify** (para Queries avançadas)
+* **Banco de Dados:** SQLite (`liberdade.db`)
+* **ORM:** Entity Framework Core 8
 
-1. **Etapa 1 – Acumulação**  
-   - Aportes mensais (~R$ 1.500)  
-   - Saldo inicial em **Renda Fixa (Tesouro Selic 2031)**  
-   - Objetivo: rendimentos cobrirem o aluguel  
-   - **Meta:** R$ 600/mês  
+## 3. Estrutura de Projetos (Dependências)
+1.  `MyFinance.Core`: Entidades, Enums, Constantes. (Sem dependências)
+2.  `MyFinance.Application`: Contém os *Commands*, *Queries*, *Handlers* (CQRS), *DTOs* e Interfaces de Repositório. Depende de `Core`.
+3.  `MyFinance.Infrastructure`: Implementação do EF Core, Migrations e Repositórios. Depende de `Application` (para implementar interfaces) e `Core`.
+4.  `MyFinance.API`: Depende de `Application` (para enviar Comandos) e `Infrastructure` (para Injeção de Dependência).
 
-2. **Etapa 2 – Transição / Renda**  
-   - Migração gradual para **FIIs** (Papel e Tijolo)  
-   - Geração de renda mensal isenta  
+## 4. Estrutura de Código Atual (Domain & Infra)
 
-3. **Etapa 3 – Risco**  
-   - Uso da renda excedente para **empreendedorismo**
-
-### Requisito-chave
-
-> O sistema deve possuir **Rebalanceamento Inteligente**, sugerindo quando **vender Selic** e **comprar FIIs** com base na **MetaAlocacao** da fase atual.
-
----
-
-## 2. Stack Tecnológica
-
-- **Framework:** .NET 9 (Minimal API)
-- **Banco de Dados:** SQLite (`liberdade.db`)
-- **ORM:** Entity Framework Core
-- **Arquitetura:** Clean Architecture  
-
-Core <- Infrastructure <- API / Worker
-
-
----
-
-## 3. Estrutura de Código Atual (Domain & Infrastructure)
-
-### 3.1. Entidades (Core/Entities)
-
-> Todas as entidades estão nomeadas em **Português**.
-
-#### Ativo.cs
+### 4.1. Entidades (Core/Entities)
 
 ```csharp
 public class Ativo
@@ -168,20 +146,27 @@ public class PosicaoCarteiraConfiguration : IEntityTypeConfiguration<PosicaoCart
 - Banco de dados atualizado sempre que a aplicação é executada: `Migrate()` em `Program.cs`
 
 ---
+
+
 ## 5. Próximos Passos (Roadmap de Implementação)
 
 **Imediato (Próxima Sessão)**
 
-- Implementar Services
+##### Fase 1: Setup da Camada Application (Imediato)
+- Criar projeto Liberdade.Application. (feito)
+- Instalar pacotes: MediatR, FluentValidation, Gridify. (feito)
+- Estrutura de pastas: Application/Handlers, Commands, Queries, DTOs, Validators. (feito)
+- Configurar Injeção de Dependência em API. (feito)
 
-    - `AtivoService`  
-        CRUD básico para cadastrar Tesouro Selic e FIIs.
+#### Fase 2: Implementação de Features (CQRS)
 
-    - `TransacaoService`  
-        Lógica para processar:
-        - Aporte (entrada de dinheiro — atualiza caixa).
-        - Compra (uso de caixa para adquirir ativo).
-        - Deve atualizar a tabela `PosicaoCarteira` ao processar uma transação.
+Feature Ativos:
+- CreateAtivoCommand: Cadastrar Tesouro Selic/FIIs.
+- GetAtivosQuery: Listagem com Gridify.
+
+Feature Transações:
+- RegistrarAporteCommand: Entrada de Caixa.
+- RealizarCompraCommand: Compra de ativo (Atualiza PosicaoCarteira).
 
 - Endpoints (API)
     - `POST /api/transacoes/aporte` — Registrar entrada de dinheiro.
