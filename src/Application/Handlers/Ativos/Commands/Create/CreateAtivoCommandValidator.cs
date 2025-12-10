@@ -1,8 +1,9 @@
-﻿using Application.Common.Exceptions;
-using Application.Common.Interfaces;
+﻿using Application.Common.Interfaces;
 using Application.Handlers.Ativos.Responses;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using ValidationException = Application.Common.Exceptions.ValidationException;
+
 
 namespace Application.Handlers.Ativos.Commands.Create
 {
@@ -32,7 +33,7 @@ namespace Application.Handlers.Ativos.Commands.Create
             var exists = await _context.Ativos.AnyAsync(a => a.Codigo == codigo, cancellationToken);
             if (exists)
             {
-                throw new ValidationsException(AtivoErrors.CodigoExists(codigo));
+                throw new ValidationException(AtivoErrors.CodigoExists(codigo));
             }
             return true;
         }

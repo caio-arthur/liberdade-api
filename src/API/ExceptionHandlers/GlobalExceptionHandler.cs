@@ -35,7 +35,7 @@ namespace API.ExceptionHandlers
                 statusCode = domainEx.Error.Codigo;
                 errorResponse = domainEx.Error;
             }
-            else if (exception is ValidationsException validationEx)
+            else if (exception is ValidationException validationEx)
             {
                 statusCode = validationEx.Error.Codigo;
                 errorResponse = validationEx.Error;

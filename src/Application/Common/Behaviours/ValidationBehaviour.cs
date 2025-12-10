@@ -1,6 +1,7 @@
 using Application.Common.Models;
 using FluentValidation;
 using MediatR;
+using ValidationException = Application.Common.Exceptions.ValidationException;
 
 namespace Application.Common.Behaviours
 {
@@ -43,26 +44,7 @@ namespace Application.Common.Behaviours
                         error = new Error(400, "Validation.Error", firstFailure.ErrorMessage);
                     }
 
-                    var responseType = typeof(TResponse);
-
-                    if (responseType == typeof(Response))
-                    {
-                        return (TResponse)(object)Response.Failure(error);
-                    }
-
-                    if (responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(Response<>))
-                    {
-                        var resultType = responseType.GetGenericArguments()[0];
-                        
-                        var failureMethod = typeof(Response)
-                            .GetMethods()
-                            .First(m => m.Name == "Failure" && m.IsGenericMethod && m.GetParameters().Length == 1)
-                            .MakeGenericMethod(resultType);
-
-                        return (TResponse)failureMethod.Invoke(null, new object[] { error })!;
-                    }
-
-                    throw new ValidationException(failures);
+                    throw new ValidationException(error);
                 }
             }
             return await next();
