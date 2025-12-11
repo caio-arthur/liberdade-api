@@ -29,7 +29,7 @@ builder.Services.AddHttpClient("StatusInvest", client =>
 builder.Services.AddHttpClient("BCB", client =>
 {
     client.BaseAddress = new Uri("https://api.bcb.gov.br/");
-    client.DefaultRequestHeaders.Add("User-Agent", "MyFinanceApp/1.0");
+    client.DefaultRequestHeaders.Add("User-Agent", "LiberdadeApi/1.0");
 });
 
 builder.Services.AddHostedService<AtualizarMercadoWorker>();
@@ -56,7 +56,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        throw new Exception("An error occurred while migrating or seeding the database.", ex);
+        throw new Exception("Ocorreu um erro no processo de migração ou seeding do database.", ex);
     }
 }
 

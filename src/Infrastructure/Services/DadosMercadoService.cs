@@ -115,7 +115,7 @@ namespace Infrastructure.Services
             }
         }
 
-        private decimal ParseDecimal(string valor)
+        private static decimal ParseDecimal(string valor)
         {
             if (string.IsNullOrEmpty(valor)) return 0;
             valor = valor.Trim();

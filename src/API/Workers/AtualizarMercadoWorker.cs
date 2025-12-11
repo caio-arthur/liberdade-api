@@ -47,12 +47,19 @@ namespace API.Workers
                 var marketService = scope.ServiceProvider.GetRequiredService<IDadosMercadoService>();
                 var dbContext = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
 
-                var ativos = await dbContext.Ativos.ToListAsync();
+                var ativos = await dbContext.Ativos.ToListAsync(cancellationToken);
 
                 var taxaSelicMensal = await marketService.ObterTaxaSelicAtualAsync();
 
                 foreach (var ativo in ativos)
                 {
+                    // Verifica se o ativo já foi atualizado hoje
+                    if (ativo.AtualizadoEm.Date >= DateTime.UtcNow.Date)
+                    {
+                        _logger.LogInformation("Ativo {Codigo} já foi atualizado hoje. Pulando...", ativo.Codigo);
+                        continue;
+                    }
+
                     bool houveAtualizacao = false;
 
                     if (ativo.Codigo.Contains("SELIC", StringComparison.OrdinalIgnoreCase))

@@ -147,3 +147,12 @@ public class PosicaoCarteiraConfiguration : IEntityTypeConfiguration<PosicaoCart
 
 ---
 
+## 5. Próximos Passos
+
+- Agora temos:
+
+Banco de dados com Ativos e Transações. (POST e GET)
+Worker atualizando preços e taxas reais. (BackgroundService)
+Previsão matemática de quando você atinge a Etapa 2. (GET /previsao)
+
+- O próximo passo lógico seria implementar o Rebalanceamento Inteligente (sugestão de compra)
