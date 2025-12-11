@@ -147,26 +147,3 @@ public class PosicaoCarteiraConfiguration : IEntityTypeConfiguration<PosicaoCart
 
 ---
 
-
-## 5. Próximos Passos (Roadmap de Implementação)
-
-#### Implementação de Features (CQRS)
-
-Feature Ativos:
-- CreateAtivoCommand: Cadastrar Tesouro Selic/FIIs. (feito)
-- GetAtivosQuery: Listagem com Gridify. (feito)
-
-Feature Transações:
-- RegistrarAporteCommand: Entrada de Caixa.
-- RealizarCompraCommand: Compra de ativo (Atualiza PosicaoCarteira).
-
-- Endpoints (API)
-    - `POST /api/transacoes/aporte` — Registrar entrada de dinheiro.
-    - `POST /api/transacoes/compra` — Registrar compra de ativo.
-    - `GET /api/carteira` — Retornar a posição atual consolidada.
-
-**Futuro Próximo**
-
-- Implementar Job (`Worker`) para atualizar cotações do Selic e FIIs via API externa.
-- Implementar lógica de Juros Compostos para o endpoint de Previsão.
-
