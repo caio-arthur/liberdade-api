@@ -11,7 +11,7 @@ namespace Application.Handlers.Transacoes.Commands.RealizarCompra
 {
     public class RealizarCompraCommand : IRequestWrapper
     {
-        public Guid AtivoId { get; set; }
+        public string AtivoCodigo { get; set; }
         public decimal Quantidade { get; set; }
         public decimal PrecoUnitario { get; set; }
         public DateTime Data { get; set; }
@@ -29,15 +29,15 @@ namespace Application.Handlers.Transacoes.Commands.RealizarCompra
 
         public async Task<Response> Handle(RealizarCompraCommand request, CancellationToken cancellationToken)
         {
-            var ativo = await _context.Ativos.FindAsync([request.AtivoId], cancellationToken);
+            var ativo = await _context.Ativos.FirstOrDefaultAsync(a => a.Codigo == request.AtivoCodigo, cancellationToken);
             if (ativo == null)
             {
-                throw new DomainException(AtivoErrors.NotFound(request.AtivoId));
+                throw new DomainException(AtivoErrors.NotFound());
             }
 
             var transacao = new Transacao
             {
-                AtivoId = request.AtivoId,
+                AtivoId = ativo.Id,
                 TipoTransacao = TransacaoTipo.Compra,
                 Quantidade = request.Quantidade,
                 PrecoUnitario = request.PrecoUnitario,
@@ -49,13 +49,13 @@ namespace Application.Handlers.Transacoes.Commands.RealizarCompra
             _context.Transacoes.Add(transacao);
 
             var posicao = await _context.PosicaoCarteiras
-                .FirstOrDefaultAsync(p => p.AtivoId == request.AtivoId, cancellationToken);
+                .FirstOrDefaultAsync(p => p.AtivoId == ativo.Id, cancellationToken);
 
             if (posicao == null)
             {
                 posicao = new PosicaoCarteira
                 {
-                    AtivoId = request.AtivoId,
+                    AtivoId = ativo.Id,
                     Codigo = ativo.Codigo,
                     Categoria = ativo.Categoria,
                     Quantidade = request.Quantidade,

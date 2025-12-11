@@ -4,7 +4,7 @@ namespace Application.Handlers.Ativos.Responses
 {
     public static class AtivoErrors
     {
-        public static Error NotFound(Guid Id) => new Error(codigo: 404, 
+        public static Error NotFound() => new Error(codigo: 404, 
                                                            nome: "Ativo.NotFound", 
                                                            mensagem: "Ativo não encontrado.");
 

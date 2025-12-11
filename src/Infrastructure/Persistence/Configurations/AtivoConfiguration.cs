@@ -12,6 +12,9 @@ namespace Infrastructure.Persistence.Configurations
 
             builder.Property(a => a.Categoria)
                    .HasConversion<string>();
+
+            builder.HasIndex(a => a.Codigo)
+                   .IsUnique();
         }
     }
 }

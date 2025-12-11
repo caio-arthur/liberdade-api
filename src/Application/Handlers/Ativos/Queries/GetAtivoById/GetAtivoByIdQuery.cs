@@ -29,7 +29,7 @@ namespace Application.Handlers.Ativos.Queries.GetAtivoById
         
             if (entity == null)
             {
-                throw new DomainException(AtivoErrors.NotFound(request.Id));
+                throw new DomainException(AtivoErrors.NotFound());
             }
 
             return Response.Success(_mapper.Map<AtivoDto>(entity));
