@@ -18,7 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddHostedService<Application.Workers.NotificacaoInvestimentosWorker>();
+builder.Services.AddHostedService<DiarioFinanceiroWorker>(); 
 builder.Services.AddScoped<IDadosMercadoService, DadosMercadoService>();
 builder.Services.Configure<NtfyConfigs>(builder.Configuration.GetSection("NtfySettings"));
 builder.Services.AddHttpClient<INotificacaoService, NtfyNotificacaoService>();

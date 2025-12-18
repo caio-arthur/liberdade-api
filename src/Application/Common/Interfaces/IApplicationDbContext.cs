@@ -10,6 +10,8 @@ namespace Application.Common.Interfaces
         DbSet<MetaAlocacao> MetaAlocacoes { get; }
         DbSet<PosicaoCarteira> PosicaoCarteiras { get; }
         DbSet<Transacao> Transacoes { get; }
+        DbSet<HistoricoPatrimonio> HistoricoPatrimonios { get; set; }
+
         Task<int> SaveChangesAsync(CancellationToken cancellationToken);
         DatabaseFacade Database { get; }
     }

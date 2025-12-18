@@ -11,12 +11,12 @@ O sistema visa gerenciar a evolução patrimonial pessoal focada em três etapas
 **Requisito Chave:** O sistema deve possuir "Rebalanceamento Inteligente", sugerindo quando vender Selic e comprar FIIs baseado na *MetaAlocacao* da fase atual.
 
 ## 2. Stack Tecnológica e Padrões
-* **Framework:** .NET 8 (Minimal API)
+* **Framework:** .NET 9 (Minimal API)
 * **Arquitetura:** Clean Architecture + CQRS
 * **Padrão de Mensageria:** Mediator (via biblioteca **MediatR**)
 * **Filtros Dinâmicos:** **Gridify** (para Queries avançadas)
 * **Banco de Dados:** SQLite (`liberdade.db`)
-* **ORM:** Entity Framework Core 8
+* **ORM:** Entity Framework Core 9
 
 ## 3. Estrutura de Projetos (Dependências)
 1.  `MyFinance.Core`: Entidades, Enums, Constantes. (Sem dependências)
@@ -139,20 +139,82 @@ public class PosicaoCarteiraConfiguration : IEntityTypeConfiguration<PosicaoCart
 ```
 
 ---
-## 4. Status do Banco de Dados
+## 4. Banco de Dados
 
-- Migration `InitialCreate` criada e validada.
 - Migrações criadas a partir do comando: dotnet ef migrations add "InitialCreate" -p src/Infrastructure -s src/API -o Migrations
 - Banco de dados atualizado sempre que a aplicação é executada: `Migrate()` em `Program.cs`
 
----
 
-## 5. Próximos Passos
+## 5. Notificações
 
-- Agora temos:
+- O sistema utiliza a API do ntfy.sh para enviar notificações simples via HTTP.
 
-Banco de dados com Ativos e Transações. (POST e GET)
-Worker atualizando preços e taxas reais. (BackgroundService)
-Previsão matemática de quando você atinge a Etapa 2. (GET /previsao)
+```csharp
+public EnviarNotificacaoCommand(string title, string message, NotificacaoPrioridade priority = NotificacaoPrioridade.Default)
+{
+    Title = title;
+    Message = message;
+    Priority = priority;
+}
+```
 
-- O próximo passo lógico seria implementar o Rebalanceamento Inteligente (sugestão de compra)
+## 6. Rotas expostas
+
+- `POST /api/transacoes/aporte` - Registrar novo aporte. (depósito)
+- `POST /api/transacoes/compra` - Registrar nova compra.
+
+- `GET /api/ativos` - Consultar ativos, retorna precoAtual, valorRendimentoMesAnterior, percentualDeRetornoMensalEsperado.
+- `POST /api/ativos` - Cadastra um ativo.
+
+- `POST /api/notificacoes` - Envia uma mensagem utilizando ntfy.sh. (deve ser refatorado para ser utilizado apenas internamente)
+
+- `GET /api/previsao?aporteMensal=1500&metaRendaMensal=600` - Previsão de quando o objetivo será atingido. 
+response
+{
+  "sucesso": true,
+  "erro": {
+    "codigo": 0,
+    "nome": "string",
+    "mensagem": "string"
+  },
+  "dados": {
+    "patrimonioAtual": 0,
+    "rendaPassivaAtual": 0,
+    "metaRendaMensal": 0,
+    "dataAtingimentoMeta": "2025-12-17T22:35:13.423Z",
+    "mesesRestantes": 0,
+    "patrimonioNecessario": 0,
+    "evolucaoMensal": [
+      {
+        "mesNumero": 0,
+        "data": "2025-12-17T22:35:13.423Z",
+        "patrimonioAcumulado": 0,
+        "rendaGerada": 0
+      }
+    ]
+  }
+}
+
+- `GET /api/recomendacao?valorAporte=750` - O sistema faz uma sugestão de compra para um aporte
+response
+{
+  "sucesso": true,
+  "erro": {
+    "codigo": 0,
+    "nome": "string",
+    "mensagem": "string"
+  },
+  "dados": {
+    "categoria": "string",
+    "codigoAtivo": "string",
+    "acao": "string",
+    "valorSugerido": 0,
+    "quantidadeEstimada": 0
+  }
+}
+
+### 7. Workers
+
+- NotificacaoInvestimentosWorker: existe para enviar notificações automáticas e motivacionais, em horário programado, com base na previsão de investimentos e metas financeiras.
+- AtualizarMercadoWorker: existe para manter os dados de mercado atualizados, buscando periodicamente cotações, rendimentos e taxas (ex.: Selic, FIIs) e salvando no banco.
+
