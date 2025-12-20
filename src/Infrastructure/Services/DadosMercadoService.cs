@@ -24,25 +24,41 @@ namespace Infrastructure.Services
             {
                 var client = _httpClientFactory.CreateClient("BCB");
 
-                var response = await client.GetFromJsonAsync<List<BcbSerieDto>>("dados/serie/bcdata.sgs.4390/dados/ultimos/2?formato=json");
+                // Buscamos os últimos 10 dias para garantir que pegamos o último dia útil, mesmo em feriados longos
+                var response = await client.GetFromJsonAsync<List<BcbSerieDto>>("dados/serie/bcdata.sgs.11/dados/ultimos/10?formato=json");
 
                 if (response != null && response.Any())
                 {
-                    var dadosOrdenados = response
-                        .Select(x => new { Data = DateTime.ParseExact(x.Data, "dd/MM/yyyy", CultureInfo.InvariantCulture), Valor = x.Valor })
+                    // Ordena por data decrescente (do mais recente para o mais antigo)
+                    var ultimoDado = response
+                        .Select(x => new {
+                            Data = DateTime.ParseExact(x.Data, "dd/MM/yyyy", CultureInfo.InvariantCulture),
+                            Valor = ParseDecimal(x.Valor)
+                        })
                         .OrderByDescending(x => x.Data)
-                        .ToList();
+                        .FirstOrDefault();
 
-                    var dadoReferencia = dadosOrdenados.Count > 1 ? dadosOrdenados[1] : dadosOrdenados[0];
+                    if (ultimoDado != null)
+                    {
+                        // O valor vem como 0.055131 (que significa 0.055% ao dia).
+                        // Se quisermos converter para mensal (aprox 21 dias úteis) para projeção:
+                        // Fórmula: ((1 + taxa_dia/100) ^ 21) - 1 * 100
 
-                    _logger.LogInformation("Usando Selic de referência: {Data} com valor {Valor}", dadoReferencia.Data, dadoReferencia.Valor);
+                        double taxaDia = (double)ultimoDado.Valor;
+                        double taxaMensal = (Math.Pow(1 + (taxaDia / 100), 21) - 1) * 100;
 
-                    return ParseDecimal(dadoReferencia.Valor);
+                        _logger.LogInformation("Selic Diária: {TaxaDia}% | Mensal Aprox: {TaxaMensal}% (Ref: {Data})",
+                            taxaDia, taxaMensal.ToString("F4"), ultimoDado.Data.ToShortDateString());
+
+                        // Retornamos a taxa MENSAL estimada para salvar na entidade,
+                        // já que a entidade espera 'PercentualDeRetornoMensalEsperado'.
+                        return (decimal)taxaMensal;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao obter Selic Mensal (4390)");
+                _logger.LogError(ex, "Erro ao obter Selic Diária (Série 11)");
             }
             return null;
         }
@@ -56,7 +72,11 @@ namespace Infrastructure.Services
 
                 if (response != null && response.Any())
                 {
-                    var ultimoDado = response.OrderByDescending(x => x.Date).FirstOrDefault();
+
+                    var ultimoDado = response
+                        .OrderByDescending(x => x.Date) 
+                        .FirstOrDefault();
+
                     return ultimoDado?.SellPrice;
                 }
             }

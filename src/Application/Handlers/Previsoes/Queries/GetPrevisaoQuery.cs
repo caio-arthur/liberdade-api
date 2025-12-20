@@ -2,6 +2,7 @@
 using Application.Common.Models;
 using Application.Common.Wrappers;
 using Application.Handlers.Previsoes.Responses;
+using Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,75 +10,123 @@ namespace Application.Handlers.Previsoes.Queries
 {
     public class GetPrevisaoQuery : IRequestWrapper<PrevisaoRetornoDto>
     {
-        public decimal AporteMensal { get; set; } = 1500m; 
-        public decimal MetaRendaMensal { get; set; } = 600m;
+        public decimal AporteMensal { get; set; } = 1500m;
+        public decimal MetaRendaMensal { get; set; } = 450m;
     }
 
     public class GetPrevisaoQueryHandler : IRequestHandler<GetPrevisaoQuery, Response<PrevisaoRetornoDto>>
     {
         private readonly IApplicationDbContext _context;
+        private readonly IFeriadosNacionaisService _feriados;
 
-        public GetPrevisaoQueryHandler(IApplicationDbContext context)
+        public GetPrevisaoQueryHandler(IApplicationDbContext context, IFeriadosNacionaisService feriados)
         {
             _context = context;
+            _feriados = feriados;
         }
 
         public async Task<Response<PrevisaoRetornoDto>> Handle(GetPrevisaoQuery request, CancellationToken cancellationToken)
         {
-            var ativos = await _context.PosicaoCarteiras.ToListAsync(cancellationToken);
+            var posicoes = await _context.PosicaoCarteiras.ToListAsync(cancellationToken);
+            decimal patrimonioTotal = posicoes.Sum(p => p.Quantidade * p.PrecoAtual);
 
-            decimal patrimonioTotal = ativos.Sum(a => a.Quantidade * a.PrecoAtual);
-
-
-            var ativosList = await _context.Ativos
+            var ativosSelic = await _context.Ativos
                 .Where(a => a.Codigo.Contains("SELIC"))
                 .ToListAsync(cancellationToken);
 
-            var ativoReferencia = ativosList
+            var ativoReferencia = ativosSelic
                 .OrderByDescending(a => a.PercentualDeRetornoMensalEsperado)
                 .FirstOrDefault();
 
             decimal taxaMensal = (ativoReferencia?.PercentualDeRetornoMensalEsperado ?? 0.85m) / 100;
 
+            if (taxaMensal <= 0) taxaMensal = 0.0085m;
+
+            double taxaDiariaDouble = Math.Pow((double)(1 + taxaMensal), 1.0 / 21.0) - 1;
+            decimal taxaDiaria = (decimal)taxaDiariaDouble;
+
+            var hoje = DateTime.Today;
+            var dataInicio = hoje;
+
+            if (dataInicio == DateTime.MinValue) dataInicio = hoje;
+
+            var primeiroDiaDesteMes = new DateTime(dataInicio.Year, dataInicio.Month, 1);
+            var dataFimMesAtual = primeiroDiaDesteMes.AddMonths(1).AddDays(-1);
+
+            decimal patrimonioNecessario = request.MetaRendaMensal / taxaMensal;
+
             var resposta = new PrevisaoRetornoDto
             {
                 PatrimonioAtual = patrimonioTotal,
                 MetaRendaMensal = request.MetaRendaMensal,
-                RendaPassivaAtual = patrimonioTotal * taxaMensal
+                PatrimonioNecessario = Math.Round(patrimonioNecessario, 2),
+                RendaPassivaAtual = Math.Round(patrimonioTotal * taxaMensal, 2),
+                EvolucaoDiaria = new List<EvolucaoPontoDto>()
             };
 
             if (resposta.RendaPassivaAtual >= request.MetaRendaMensal)
             {
-                resposta.DataAtingimentoMeta = DateTime.Today;
                 resposta.MesesRestantes = 0;
+                resposta.DataAtingimentoMeta = hoje;
                 return Response.Success(resposta);
             }
 
             decimal saldoSimulado = patrimonioTotal;
-            DateTime dataSimulada = DateTime.Today;
-            int meses = 0;
+            DateTime dataSimulada = dataInicio;
+            int diasDecorridos = 0;
 
-            while (saldoSimulado * taxaMensal < request.MetaRendaMensal && meses < 600)
+            var feriadosNacionais = await _feriados.GetFeriadosNacionaisPorEstadoUfEAno("MG", hoje.Year, cancellationToken);
+            if (dataFimMesAtual.Year > hoje.Year)
             {
-                meses++;
-                dataSimulada = dataSimulada.AddMonths(1);
-
-                decimal rendimento = saldoSimulado * taxaMensal;
-
-                saldoSimulado += rendimento + request.AporteMensal;
-
-                resposta.EvolucaoMensal.Add(new EvolucaoMesDto
-                {
-                    MesNumero = meses,
-                    Data = dataSimulada,
-                    PatrimonioAcumulado = Math.Round(saldoSimulado, 2),
-                    RendaGerada = Math.Round(saldoSimulado * taxaMensal, 2)
-                });
+                var feriadosProximo = await _feriados.GetFeriadosNacionaisPorEstadoUfEAno("MG", dataFimMesAtual.Year, cancellationToken);
+                feriadosNacionais.AddRange(feriadosProximo);
             }
 
-            resposta.MesesRestantes = meses;
-            resposta.DataAtingimentoMeta = dataSimulada;
-            resposta.PatrimonioNecessario = saldoSimulado; 
+            var feriadosSet = feriadosNacionais.Select(f => f.Data.Date).ToHashSet();
+
+            while (dataSimulada <= dataFimMesAtual)
+            {
+                bool ehFimDeSemana = dataSimulada.DayOfWeek == DayOfWeek.Saturday ||
+                                     dataSimulada.DayOfWeek == DayOfWeek.Sunday;
+                bool ehFeriado = feriadosSet.Contains(dataSimulada.Date);
+                bool ehDiaUtil = !ehFimDeSemana && !ehFeriado;
+
+                if (ehDiaUtil)
+                {
+                    saldoSimulado += saldoSimulado * taxaDiaria;
+
+                    resposta.EvolucaoDiaria.Add(new EvolucaoPontoDto
+                    {
+                        DiasDecorridos = diasDecorridos++,
+                        Data = dataSimulada,
+                        PatrimonioAcumulado = Math.Round(saldoSimulado, 2),
+                        RendaMensalEstimada = Math.Round(saldoSimulado * taxaMensal, 2)
+                    });
+                }
+                dataSimulada = dataSimulada.AddDays(1);
+            }
+
+            decimal saldoProjecao = saldoSimulado;
+            int mesesProjecao = 0;
+
+            int maxMeses = 1200;
+
+            while (saldoProjecao * taxaMensal < request.MetaRendaMensal && mesesProjecao < maxMeses)
+            {
+                saldoProjecao += saldoProjecao * taxaMensal;
+
+                saldoProjecao += request.AporteMensal;
+
+                mesesProjecao++;
+            }
+
+            resposta.MesesRestantes = mesesProjecao;
+            resposta.DataAtingimentoMeta = dataFimMesAtual.AddMonths(mesesProjecao);
+
+            if (mesesProjecao >= maxMeses)
+            {
+                resposta.DataAtingimentoMeta = DateTime.MaxValue;
+            }
 
             return Response.Success(resposta);
         }

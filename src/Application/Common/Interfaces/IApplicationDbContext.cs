@@ -11,6 +11,7 @@ namespace Application.Common.Interfaces
         DbSet<PosicaoCarteira> PosicaoCarteiras { get; }
         DbSet<Transacao> Transacoes { get; }
         DbSet<HistoricoPatrimonio> HistoricoPatrimonios { get; set; }
+        DbSet<FeriadoNacional> FeriadosNacionais { get; set; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken);
         DatabaseFacade Database { get; }

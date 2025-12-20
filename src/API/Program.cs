@@ -1,11 +1,9 @@
 using API.ExceptionHandlers;
 using API.Workers;
 using Application;
-using Application.Common.Interfaces;
 using Infrastructure;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.SeedData;
-using Infrastructure.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,9 +17,6 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddHostedService<DiarioFinanceiroWorker>(); 
-builder.Services.AddScoped<IDadosMercadoService, DadosMercadoService>();
-builder.Services.Configure<NtfyConfigs>(builder.Configuration.GetSection("NtfySettings"));
-builder.Services.AddHttpClient<INotificacaoService, NtfyNotificacaoService>();
 
 builder.Services.AddHttpClient("StatusInvest", client =>
 {
