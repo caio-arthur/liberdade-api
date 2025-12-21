@@ -10,7 +10,7 @@ namespace Infrastructure.Persistence.SeedData
             if (!context.Ativos.Any())
             {
                 context.Ativos.AddRange(
-                    new Ativo { Codigo = "SELIC2031", Nome = "Tesouro Selic 2031", Categoria = AtivoCategoria.RendaFixaLiquidez, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "BRSTNCLF1RU6", Nome = "Tesouro Selic 2031", Categoria = AtivoCategoria.RendaFixaLiquidez, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "RBRR11", Nome = "FII RBR Rendimento High Grade", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "CPTS11", Nome = "Capitania Securities II", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobiliários", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },

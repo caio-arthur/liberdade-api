@@ -28,6 +28,32 @@ namespace API.Workers
             _logger = logger;
         }
 
+        // debug
+        //protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        //{
+        //    _logger.LogInformation("DiarioFinanceiroWorker iniciado em modo de TESTE (1 em 1 minuto).");
+
+        //    while (!stoppingToken.IsCancellationRequested)
+        //    {
+        //        try
+        //        {
+        //            _logger.LogInformation($"Executando processamento às: {DateTime.Now}");
+
+        //            // Removi a trava de final de semana para seus testes funcionarem agora
+        //            await ProcessarRelatorioAsync(stoppingToken);
+
+        //            _logger.LogInformation("Processamento concluído. Aguardando 1 minuto para o próximo ciclo...");
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(ex, "Erro ao processar fechamento.");
+        //        }
+
+        //        // Define o intervalo de 1 minuto
+        //        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        //    }
+        //}
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("DiarioFinanceiroWorker iniciado.");
@@ -61,30 +87,7 @@ namespace API.Workers
             }
         }
 
-        //protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        //{
-        //    _logger.LogInformation("DiarioFinanceiroWorker iniciado em modo de TESTE (1 em 1 minuto).");
 
-        //    while (!stoppingToken.IsCancellationRequested)
-        //    {
-        //        try
-        //        {
-        //            _logger.LogInformation($"Executando processamento às: {DateTime.Now}");
-
-        //            // Removi a trava de final de semana para seus testes funcionarem agora
-        //            await ProcessarRelatorioAsync(stoppingToken);
-
-        //            _logger.LogInformation("Processamento concluído. Aguardando 1 minuto para o próximo ciclo...");
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _logger.LogError(ex, "Erro ao processar fechamento.");
-        //        }
-
-        //        // Define o intervalo de 1 minuto
-        //        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-        //    }
-        //}
 
         private async Task ProcessarRelatorioAsync(CancellationToken token)
         {

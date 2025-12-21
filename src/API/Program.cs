@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +17,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddHostedService<DiarioFinanceiroWorker>(); 
+builder.Services.AddHostedService<DiarioFinanceiroWorker>();
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 builder.Services.AddHttpClient("StatusInvest", client =>
 {

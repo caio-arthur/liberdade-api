@@ -2,9 +2,9 @@
 using Application.Common.Models;
 using Application.Common.Wrappers;
 using Application.Handlers.Previsoes.Responses;
-using Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Application.Handlers.Previsoes.Queries
 {
@@ -18,11 +18,13 @@ namespace Application.Handlers.Previsoes.Queries
     {
         private readonly IApplicationDbContext _context;
         private readonly IFeriadosNacionaisService _feriados;
+        private readonly string _codigoSelic;
 
-        public GetPrevisaoQueryHandler(IApplicationDbContext context, IFeriadosNacionaisService feriados)
+        public GetPrevisaoQueryHandler(IApplicationDbContext context, IFeriadosNacionaisService feriados, IConfiguration config)
         {
             _context = context;
             _feriados = feriados;
+            _codigoSelic = config["BancoCentral:CodigoIsinSelic2031"] ?? "BRSTNCLF1RU6";
         }
 
         public async Task<Response<PrevisaoRetornoDto>> Handle(GetPrevisaoQuery request, CancellationToken cancellationToken)
@@ -31,7 +33,7 @@ namespace Application.Handlers.Previsoes.Queries
             decimal patrimonioTotal = posicoes.Sum(p => p.Quantidade * p.PrecoAtual);
 
             var ativosSelic = await _context.Ativos
-                .Where(a => a.Codigo.Contains("SELIC"))
+                .Where(a => a.Codigo.Contains(_codigoSelic))
                 .ToListAsync(cancellationToken);
 
             var ativoReferencia = ativosSelic
@@ -48,10 +50,7 @@ namespace Application.Handlers.Previsoes.Queries
             var hoje = DateTime.Today;
             var dataInicio = hoje;
 
-            if (dataInicio == DateTime.MinValue) dataInicio = hoje;
-
-            var primeiroDiaDesteMes = new DateTime(dataInicio.Year, dataInicio.Month, 1);
-            var dataFimMesAtual = primeiroDiaDesteMes.AddMonths(1).AddDays(-1);
+            var dataFimMesAtual = dataInicio.AddMonths(1).AddDays(-1);
 
             decimal patrimonioNecessario = request.MetaRendaMensal / taxaMensal;
 
@@ -73,7 +72,7 @@ namespace Application.Handlers.Previsoes.Queries
 
             decimal saldoSimulado = patrimonioTotal;
             DateTime dataSimulada = dataInicio;
-            int diasDecorridos = 0;
+            int diasDecorridos = 1;
 
             var feriadosNacionais = await _feriados.GetFeriadosNacionaisPorEstadoUfEAno("MG", hoje.Year, cancellationToken);
             if (dataFimMesAtual.Year > hoje.Year)
