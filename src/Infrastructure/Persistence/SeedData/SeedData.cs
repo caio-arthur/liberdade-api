@@ -10,14 +10,14 @@ namespace Infrastructure.Persistence.SeedData
             if (!context.Ativos.Any())
             {
                 context.Ativos.AddRange(
-                    new Ativo { Codigo = "SELIC2031", Nome = "Tesouro Selic 2031", Categoria = AtivoCategoria.RendaFixaLiquidez },
-                    new Ativo { Codigo = "RBRR11", Nome = "FII RBR Rendimento High Grade", Categoria = AtivoCategoria.FiiPapel },
-                    new Ativo { Codigo = "CPTS11", Nome = "Capitania Securities II", Categoria = AtivoCategoria.FiiPapel },
-                    new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobiliários", Categoria = AtivoCategoria.FiiPapel },
-                    new Ativo { Codigo = "XPML11", Nome = "XP Malls", Categoria = AtivoCategoria.FiiTijoloShopping },
-                    new Ativo { Codigo = "VISC11", Nome = "Vinci Shopping Centers", Categoria = AtivoCategoria.FiiTijoloShopping },
-                    new Ativo { Codigo = "HGLG11", Nome = "PATRIA LOG", Categoria = AtivoCategoria.FiiTijoloLogistica },
-                    new Ativo { Codigo = "XPLG11", Nome = "XP Log", Categoria = AtivoCategoria.FiiTijoloLogistica }
+                    new Ativo { Codigo = "BRSTNCLF1RU6", Nome = "Tesouro Selic 2031", Categoria = AtivoCategoria.RendaFixaLiquidez, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "RBRR11", Nome = "FII RBR Rendimento High Grade", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "CPTS11", Nome = "Capitania Securities II", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobiliï¿½rios", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "XPML11", Nome = "XP Malls", Categoria = AtivoCategoria.FiiTijoloShopping, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "VISC11", Nome = "Vinci Shopping Centers", Categoria = AtivoCategoria.FiiTijoloShopping, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "HGLG11", Nome = "PATRIA LOG", Categoria = AtivoCategoria.FiiTijoloLogistica, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "XPLG11", Nome = "XP Log", Categoria = AtivoCategoria.FiiTijoloLogistica, AtualizadoEm = DateTime.MinValue }
                 );
                 context.SaveChanges(); 
             }
@@ -40,7 +40,7 @@ namespace Infrastructure.Persistence.SeedData
 
             if (!context.Transacoes.Any())
             {
-                var ativoSelic2031 = context.Ativos.First(a => a.Codigo == "SELIC2031");
+                var ativoSelic2031 = context.Ativos.First(a => a.Codigo == "BRSTNCLF1RU6");
 
                 context.Transacoes.AddRange(
                     new Transacao

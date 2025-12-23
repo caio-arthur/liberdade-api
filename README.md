@@ -141,7 +141,8 @@ public class PosicaoCarteiraConfiguration : IEntityTypeConfiguration<PosicaoCart
 ---
 ## 4. Banco de Dados
 
-- Migrações criadas a partir do comando: dotnet ef migrations add "InitialCreate" -p src/Infrastructure -s src/API -o Migrations
+- Migrações criadas a partir do comando: 
+dotnet ef migrations add "InitialCreate" -p src/Infrastructure -s src/API -o Migrations
 - Banco de dados atualizado sempre que a aplicação é executada: `Migrate()` em `Program.cs`
 
 

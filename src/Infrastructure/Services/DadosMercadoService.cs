@@ -1,7 +1,11 @@
 ﻿using Application.Common.Interfaces;
+using Application.Handlers.Feriados.Queries.ObterDiasUteisPorMes;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
+using System.IO.Compression;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -11,11 +15,13 @@ namespace Infrastructure.Services
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<DadosMercadoService> _logger;
+        private readonly ISender _mediator;
 
-        public DadosMercadoService(IHttpClientFactory httpClientFactory, ILogger<DadosMercadoService> logger)
+        public DadosMercadoService(IHttpClientFactory httpClientFactory, ILogger<DadosMercadoService> logger, ISender sender)
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
+            _mediator = sender;
         }
 
         public async Task<decimal?> ObterTaxaSelicAtualAsync()
@@ -24,25 +30,48 @@ namespace Infrastructure.Services
             {
                 var client = _httpClientFactory.CreateClient("BCB");
 
-                var response = await client.GetFromJsonAsync<List<BcbSerieDto>>("dados/serie/bcdata.sgs.4390/dados/ultimos/2?formato=json");
+                // Buscamos os últimos 10 dias para garantir que pegamos o último dia útil, mesmo em feriados longos
+                var response = await client.GetFromJsonAsync<List<BcbSerieDto>>("dados/serie/bcdata.sgs.11/dados/ultimos/10?formato=json");
 
                 if (response != null && response.Any())
                 {
-                    var dadosOrdenados = response
-                        .Select(x => new { Data = DateTime.ParseExact(x.Data, "dd/MM/yyyy", CultureInfo.InvariantCulture), Valor = x.Valor })
+                    // Ordena por data decrescente (do mais recente para o mais antigo)
+                    var ultimoDado = response
+                        .Select(x => new
+                        {
+                            Data = DateTime.ParseExact(x.Data, "dd/MM/yyyy", CultureInfo.InvariantCulture),
+                            Valor = ParseDecimal(x.Valor)
+                        })
                         .OrderByDescending(x => x.Data)
-                        .ToList();
+                        .FirstOrDefault();
 
-                    var dadoReferencia = dadosOrdenados.Count > 1 ? dadosOrdenados[1] : dadosOrdenados[0];
+                    if (ultimoDado != null)
+                    {
+                        // Obter dias úteis do mês via mediator de forma correta(await antes de acessar.Dados)
+                        var diasUteisResponse = await _mediator.Send(new ObterDiasUteisPorMesQuery
+                        {
+                            Ano = ultimoDado.Data.Year,
+                            Mes = ultimoDado.Data.Month,
+                            Uf = "MG"
+                        });
 
-                    _logger.LogInformation("Usando Selic de referência: {Data} com valor {Valor}", dadoReferencia.Data, dadoReferencia.Valor);
+                        int diasUteisNoMes = diasUteisResponse.Dados;
+                        if (diasUteisNoMes <= 0) diasUteisNoMes = 21; // fallback
 
-                    return ParseDecimal(dadoReferencia.Valor);
+                        // Fórmula: ((1 + taxa_dia/100) ^ dias_uteis) - 1 * 100
+                        double taxaDia = (double)ultimoDado.Valor;
+                        double taxaMensal = (Math.Pow(1 + (taxaDia / 100), diasUteisNoMes) - 1) * 100;
+
+                        _logger.LogInformation("Selic Diária: {TaxaDia}% | Mensal Aprox: {TaxaMensal}% (Ref: {Data})",
+                            taxaDia, taxaMensal.ToString("F4"), ultimoDado.Data.ToShortDateString());
+
+                        return (decimal)taxaMensal;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao obter Selic Mensal (4390)");
+                _logger.LogError(ex, "Erro ao obter Selic Diária (Série 11)");
             }
             return null;
         }
@@ -56,7 +85,11 @@ namespace Infrastructure.Services
 
                 if (response != null && response.Any())
                 {
-                    var ultimoDado = response.OrderByDescending(x => x.Date).FirstOrDefault();
+
+                    var ultimoDado = response
+                        .OrderByDescending(x => x.Date)
+                        .FirstOrDefault();
+
                     return ultimoDado?.SellPrice;
                 }
             }
@@ -65,6 +98,93 @@ namespace Infrastructure.Services
                 _logger.LogError(ex, "Erro ao obter preço do Tesouro: {Ticker}", codigoTesouro);
             }
             return null;
+        }
+
+        public async Task<(decimal? preco, DateTime? atualizadoEm)> ObterPrecoTesouroDiretoBcbAsync(string codigoIsin, int ano, int mes)
+        {
+            var url = $"http://www4.bcb.gov.br/pom/demab/negociacoes/download/NegE{ano}{mes:D2}.ZIP";
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient("BCB");
+
+                using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Falha ao baixar ZIP do BCB. Status: {Status}. URL: {Url}", response.StatusCode, url);
+                    return (null, null);
+                }
+
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+
+                var csvEntry = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
+
+                if (csvEntry == null)
+                {
+                    _logger.LogWarning("CSV não encontrado no ZIP: {Url}", url);
+                    return (null, null);
+                }
+
+                using var entryStream = csvEntry.Open();
+                // O encoding ISO-8859-1 é padrão para arquivos antigos do governo/bancos no BR
+                using var reader = new StreamReader(entryStream, Encoding.GetEncoding("ISO-8859-1"));
+
+                string? headerLine = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(headerLine)) return (null, null);
+
+                var headers = headerLine.Split(';');
+                int indexData = Array.IndexOf(headers, "DATA MOV");
+                int indexIsin = Array.IndexOf(headers, "CODIGO ISIN");
+                int indexPu = Array.IndexOf(headers, "PU MED");
+
+                // Fallback caso o header não seja encontrado exatamente com esses nomes
+                if (indexIsin == -1 || indexPu == -1)
+                {
+                    indexData = 0; indexIsin = 3; indexPu = 9; // Ajustei indices baseados no padrão visual do CSV se o header falhar, mas o ideal é confiar no header
+                }
+
+                decimal? ultimoPuEncontrado = null;
+                DateTime? dataMaisRecenteEncontrada = null; // Mudado para Nullable para facilitar o retorno
+
+                var culturaBr = new CultureInfo("pt-BR");
+
+                string? line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    var colunas = line.Split(';');
+
+                    // Garante que a linha tem colunas suficientes antes de acessar
+                    if (colunas.Length <= indexPu || colunas.Length <= indexIsin) continue;
+
+                    // Verifica o ISIN
+                    if (colunas[indexIsin].Trim().Equals(codigoIsin, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Tenta fazer o parse da Data
+                        if (DateTime.TryParse(colunas[indexData], culturaBr, DateTimeStyles.None, out var dataMov))
+                        {
+                            // Lógica: Queremos o registro mais recente disponível no arquivo
+                            // Se dataMaisRecenteEncontrada for null, é o primeiro registro válido, então aceita.
+                            if (dataMaisRecenteEncontrada == null || dataMov >= dataMaisRecenteEncontrada.Value)
+                            {
+                                if (decimal.TryParse(colunas[indexPu], NumberStyles.Number, culturaBr, out var puMed))
+                                {
+                                    dataMaisRecenteEncontrada = dataMov;
+                                    ultimoPuEncontrado = puMed;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return (ultimoPuEncontrado, dataMaisRecenteEncontrada);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao processar Título ISIN: {Isin}", codigoIsin);
+                return (null, null);
+            }
         }
 
         public async Task<(decimal Preco, decimal UltimoRendimento)?> ObterDadosFiiAsync(string ticker)

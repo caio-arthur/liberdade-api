@@ -46,5 +46,6 @@ namespace Application.Common.Helpers
             // Se o fuso retornado for UTC (fallback), o método retornará o mesmo instante.
             return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, _brazilTimeZone);
         }
+
     }
 }

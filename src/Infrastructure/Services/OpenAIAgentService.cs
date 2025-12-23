@@ -1,7 +1,7 @@
 ﻿using Application.Common.Interfaces;
+using Microsoft.Extensions.Configuration;
 using OpenAI;
 using OpenAI.Chat;
-using Microsoft.Extensions.Configuration;
 using System.ClientModel;
 
 namespace Infrastructure.Services
@@ -10,7 +10,7 @@ namespace Infrastructure.Services
     {
         private readonly string _apiKey;
         private readonly string _model = "tngtech/deepseek-r1t2-chimera:free";
-        private readonly Uri _endpoint = new Uri("https://openrouter.ai/api/v1");
+        private readonly Uri _endpoint = new("https://openrouter.ai/api/v1");
 
         public OpenRouterAgentService(IConfiguration configuration)
         {
@@ -23,38 +23,79 @@ namespace Infrastructure.Services
             var client = new OpenAIClient(new ApiKeyCredential(_apiKey), options);
             var chatClient = client.GetChatClient(_model);
 
+            string focoInstrucao;
+
+            bool houveMovimentacao = contexto.UltimasMovimentacoes != null && contexto.UltimasMovimentacoes.Any();
+            decimal percentualConcluido = contexto.MetaRenda > 0 ? (contexto.RendaAtual / contexto.MetaRenda) * 100 : 0;
+
+            if (houveMovimentacao)
+            {
+                focoInstrucao = "PRIORITY FOCUS: There were NEW TRANSACTIONS (investments) YESTERDAY. Celebrate the fact that we bought new assets. List the transactions briefly and enthusiastically.";
+            }
+            else
+            {
+                int dayStrategy = DateTime.UtcNow.DayOfYear % 3;
+
+                focoInstrucao = dayStrategy switch
+                {
+                    0 => $"FOCUS TOPIC: Highlight the 'Estimated Daily Passive Income' (R$ {contexto.RendimentoPassivoDiario:N2}). Explain that this is money generated automatically yesterday.",
+                    1 => $"FOCUS TOPIC: Highlight the 'Current Monthly Passive Income' (R$ {contexto.RendaAtual:N2}). Reinforce how this amount covers part of the monthly expenses.",
+                    _ => $"FOCUS TOPIC: Highlight the 'Goal Completion Percentage' ({percentualConcluido:N1}% completed). Focus on how close the finish line is getting."
+                };
+            }
+
+            var transactionsString = houveMovimentacao
+                ? string.Join(", ", contexto.UltimasMovimentacoes)
+                : "No manual transactions yesterday.";
+
             var promptContexto = $@"
-                DADOS FINANCEIROS DO DIA:
-                Nome da destinatária: {contexto.NomeConjuge}
-                Fase atual: {contexto.FaseAtual}
-                Patrimônio total: R$ {contexto.PatrimonioTotal:N2}
-                Variação diária: R$ {contexto.VariacaoDiaria:N2}
-                Renda passiva: R$ {contexto.RendaAtual:N2}
-                Meta de renda passiva: R$ {contexto.MetaRenda:N2}
-                Últimas movimentações: {string.Join(", ", contexto.UltimasMovimentacoes)}";
+                TIMING CONTEXT:
+                - Current Time: 9:00 AM (Morning).
+                - Data Reference: These values refer to YESTERDAY'S market close (retrieved overnight).
+
+                FINANCIAL DATA (REFERENCE: YESTERDAY):
+                - Recipient Name: {contexto.NomeConjuge}
+                - Sender Name: {contexto.NomeUsuario}
+                - Total Net Worth: R$ {contexto.PatrimonioTotal:N2}
+                - Daily Variation: R$ {contexto.VariacaoPatrimonialDiaria:N2} (Change from yesterday vs day before).
+                
+                GOALS STATUS:
+                - Passive Income Goal: R$ {contexto.MetaRenda:N2} / month
+                - Current Passive Income: R$ {contexto.RendaAtual:N2} / month
+                - Progress: {percentualConcluido:N1}% achieved
+                - Time Remaining: {contexto.MesesRestantes} months (Target: {contexto.DataEstimadaMeta:MM/yyyy})
+                
+                DAILY PERFORMANCE (YESTERDAY):
+                - Estimated Daily Passive Income (The money produced yesterday): R$ {contexto.RendimentoPassivoDiario:N2}
+                - Recent Transactions (Yesterday): {transactionsString}
+                ";
 
             var systemInstruction = $@"
-                PAPEL:
-                Você é {contexto.NomeUsuario}, enviando diariamente uma mensagem para sua esposa sobre os investimentos.
+                ROLE:
+                You are {contexto.NomeUsuario}, sending a daily text message to your wife, {contexto.NomeConjuge}. 
+                You are strictly focused on Financial Independence (FIRE).
 
-                PERSONALIDADE:
-                Tom simpático, calmo e confiante.
-                Motivacional sem exageros.
-                Extremamente objetivo e direto.
+                TONE:
+                - Affectionate but not cheesy (Use: 'Love', 'Honey', 'Darling').
+                - Confident, stoic, and partnership-oriented ('We are building this', 'Our future').
+                - Concise and direct.
 
-                OBJETIVO:
-                Analisar os dados financeiros fornecidos e gerar um relatório diário curto.
+                MANDATORY INSTRUCTIONS:
+                1. {focoInstrucao} (THIS IS THE MOST IMPORTANT RULE).
+                2. Always mention the 'Total Net Worth' value at the start or end.
+                3. Length: Maximum 3 sentences. No exceptions.
+                4. Formatting: Plain text only. NO Markdown, NO bold (**), NO headers.
+                5. Emojis: Use maximum 1 or 2 relevant emojis.
+                6. Time Context: It is 9 AM. You are reporting the results of YESTERDAY. 
+                   - Use verbs in the past tense for gains (e.g., 'Yesterday we generated...', 'Last night closed at...').
+                   - Do NOT imply the money was made this morning.
+                7. When mentioning the remaining months ({contexto.MesesRestantes}), DO NOT use minimizing words like 'only', 'just', or 'barely'. Be objective.
+                8. Language: Output MUST be in English.
 
-                REGRAS OBRIGATÓRIAS:
-                - Máximo de 3 frases.
-                - Texto corrido (sem títulos, listas ou quebras de linha).
-                - Sempre mencionar:
-                  • Patrimônio total.
-                  • Progresso da renda passiva em relação à meta.
-                - Se o patrimônio subiu: comemore de forma discreta.
-                - Se caiu: reforce a visão de longo prazo.
-                - Use no máximo 1 ou 2 emojis, apenas se fizer sentido (ex: 📈 ou 📉).
-                - Não invente dados, não faça perguntas, não dê conselhos extensos.";
+                SCENARIO HANDLING:
+                - If 'Daily Variation' is negative: Ignore the drop. Focus purely on the dividends/income generated (Daily Passive Income).
+                - If 'Daily Variation' is positive: You may briefly celebrate the growth.
+                ";
 
             var messages = new List<ChatMessage>
                 {

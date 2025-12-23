@@ -14,7 +14,12 @@ namespace Infrastructure
             services.AddDbContext<LiberdadeDbContext>(options =>
                 options.UseSqlite(configuration.GetConnectionString("SqliteConnection")));
 
+            services.AddScoped<IDadosMercadoService, DadosMercadoService>();
+            services.Configure<NtfyConfigs>(configuration.GetSection("NtfySettings"));
+            services.AddHttpClient<INotificacaoService, NtfyNotificacaoService>();
+
             services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<LiberdadeDbContext>());
+            services.AddHttpClient<IFeriadosNacionaisService, FeriadosNacionaisService>();
             services.AddTransient<IAgenteFinanceiroService, OpenRouterAgentService>();
 
             return services;

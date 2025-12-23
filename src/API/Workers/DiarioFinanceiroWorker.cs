@@ -1,7 +1,10 @@
 ﻿using Application.Common.Interfaces;
+using Application.Handlers.Feriados.Queries.EhDiaUtil;
+using Application.Handlers.Feriados.Queries.ObterDiasUteisPorMes;
 using Application.Handlers.Notificacoes.Commands;
-using Application.Handlers.Previsoes.Queries; 
-using Core.Entities;
+using Application.Handlers.Previsoes.Queries;
+using Core.Notifications;
+using Google.Cloud.Translation.V2;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,137 +21,163 @@ namespace API.Workers
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<DiarioFinanceiroWorker> _logger;
+        private readonly TranslationClient _translationClient;
 
-        // Configuração: 18:00
-        private readonly TimeSpan _horarioAlvo = new TimeSpan(18, 0, 0);
+        // Configuração: 09:00
+        private readonly TimeSpan _horarioAlvo = new(9, 0, 0);
 
         public DiarioFinanceiroWorker(
             IServiceProvider serviceProvider,
-            ILogger<DiarioFinanceiroWorker> logger)
+            ILogger<DiarioFinanceiroWorker> logger,
+            TranslationClient translationClient)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
+            _translationClient = translationClient;
+
         }
-
-        //protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        //{
-        //    _logger.LogInformation("DiarioFinanceiroWorker iniciado.");
-
-        //    while (!stoppingToken.IsCancellationRequested)
-        //    {
-        //        var agora = DateTime.Now;
-        //        var proximaExecucao = agora.Date.Add(_horarioAlvo);
-
-        //        if (agora > proximaExecucao)
-        //            proximaExecucao = proximaExecucao.AddDays(1);
-
-        //        var tempoEspera = proximaExecucao - agora;
-        //        _logger.LogInformation($"Próxima execução do relatório diário em: {tempoEspera}");
-
-        //        await Task.Delay(tempoEspera, stoppingToken);
-
-        //        if (stoppingToken.IsCancellationRequested) break;
-
-        //        try
-        //        {
-        //            if (DateTime.Now.DayOfWeek != DayOfWeek.Saturday && DateTime.Now.DayOfWeek != DayOfWeek.Sunday)
-        //            {
-        //                await ProcessarFechamentoDiario(stoppingToken);
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _logger.LogError(ex, "Erro ao processar fechamento diário.");
-        //        }
-        //    }
-        //}
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("DiarioFinanceiroWorker iniciado em modo de TESTE (1 em 1 minuto).");
+            _logger.LogInformation("DiarioFinanceiroWorker iniciado.");
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                var agora = DateTime.Now;
+                var proximaExecucao = agora.Date.Add(_horarioAlvo);
+
+                if (agora > proximaExecucao)
+                    proximaExecucao = proximaExecucao.AddDays(1);
+
+                var tempoEspera = proximaExecucao - agora;
+                _logger.LogInformation($"Próxima execução do relatório diário em: {tempoEspera}");
+
+                await Task.Delay(tempoEspera, stoppingToken);
+
+                if (stoppingToken.IsCancellationRequested) break;
+
                 try
                 {
-                    _logger.LogInformation($"Executando processamento às: {DateTime.Now}");
+                    bool ehDiaUtil;
+                    using var scope = _serviceProvider.CreateScope();
+                    {
+                        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+                        var ehDiaUtilResponse = await mediator.Send(new EhDiaUtilQuery { Data = DateTime.Today }, stoppingToken);
+                        ehDiaUtil = ehDiaUtilResponse.Dados;
+                    }
 
-                    // Removi a trava de final de semana para seus testes funcionarem agora
-                    await ProcessarFechamentoDiario(stoppingToken);
-
-                    _logger.LogInformation("Processamento concluído. Aguardando 1 minuto para o próximo ciclo...");
+                    if (ehDiaUtil)
+                    {
+                        await ProcessarRelatorioAsync(stoppingToken);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Erro ao processar fechamento.");
+                    _logger.LogError(ex, "Erro ao processar fechamento diário.");
                 }
-
-                // Define o intervalo de 1 minuto
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
         }
 
-        private async Task ProcessarFechamentoDiario(CancellationToken token)
+        // debug
+        //protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        //{
+        //    _logger.LogInformation("DiarioFinanceiroWorker iniciado em modo de TESTE (1 em 1 minuto).");
+
+        //    while (!stoppingToken.IsCancellationRequested)
+        //    {
+        //        try
+        //        {
+        //            _logger.LogInformation($"Executando processamento às: {DateTime.Now}");
+
+        //            // Removi a trava de final de semana para seus testes funcionarem agora
+        //            await ProcessarRelatorioAsync(stoppingToken);
+
+        //            _logger.LogInformation("Processamento concluído. Aguardando 1 minuto para o próximo ciclo...");
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogError(ex, "Erro ao processar fechamento.");
+        //        }
+
+        //        // Define o intervalo de 1 minuto
+        //        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        //    }
+        //}
+
+
+        private async Task ProcessarRelatorioAsync(CancellationToken token)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var aiService = scope.ServiceProvider.GetRequiredService<IAgenteFinanceiroService>();
+            var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+
+            var historicoHoje = await context.HistoricoPatrimonios
+                .Where(h => h.Data.Date == DateTime.UtcNow.Date)
+                .OrderByDescending(h => h.Data)
+                .FirstOrDefaultAsync(token);
+
+            if (historicoHoje == null) return;
+
+            var historicoAnterior = await context.HistoricoPatrimonios
+                .Where(h => h.Data.Date < DateTime.UtcNow.Date)
+                .OrderByDescending(h => h.Data)
+                .FirstOrDefaultAsync(token);
+
+            decimal patrimonioOntem = historicoAnterior?.ValorTotal ?? historicoHoje.ValorTotal;
+            decimal variacaoPatrimonial = historicoHoje.ValorTotal - patrimonioOntem;
+
+            var previsaoResponse = await sender.Send(new GetPrevisaoQuery(), token);
+            var dadosPrevisao = previsaoResponse.Dados;
+
+            int diasUteisEsteMes = sender.Send(new ObterDiasUteisPorMesQuery
             {
-                var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-                var aiService = scope.ServiceProvider.GetRequiredService<IAgenteFinanceiroService>();
-                var dbContext = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+                Ano = DateTime.UtcNow.Year,
+                Mes = DateTime.UtcNow.Month,
+                Uf = "MG"
+            }, token).Result.Dados;
 
-                var previsaoQuery = new GetPrevisaoQuery
-                {
-                    AporteMensal = 1500m, // Pode vir de config
-                    MetaRendaMensal = 600m
-                };
+            decimal rendimentoPassivoDiario = dadosPrevisao.RendaPassivaAtual / diasUteisEsteMes;
+            var percentualMetaAtingido = dadosPrevisao.RendaPassivaAtual / dadosPrevisao.MetaRendaMensal * 100;
 
-                var resultadoPrevisao = await sender.Send(previsaoQuery, token);
-                var dadosAtuais = resultadoPrevisao.Dados; 
+            var movimentacoesHoje = await context.Transacoes
+                .Where(t => t.Data.Date == DateTime.UtcNow.Date)
+                .Select(t => $"{t.TipoTransacao}: {t.ValorTotal:C} ({t.Observacoes})")
+                .ToListAsync(token);
 
-                if (dadosAtuais == null) return;
+            // 4. Monta o Contexto Enriquecido
+            var contextoDTO = new ContextoFinanceiroDto(
+                NomeUsuario: "Caio",
+                NomeConjuge: "Letícya",
+                PatrimonioTotal: historicoHoje.ValorTotal,
+                MetaRenda: dadosPrevisao.MetaRendaMensal,
+                RendaAtual: dadosPrevisao.RendaPassivaAtual,
+                VariacaoPatrimonialDiaria: variacaoPatrimonial,
+                RendimentoPassivoDiario: rendimentoPassivoDiario, // O valor calculado
+                PercentualMetaAtingido: percentualMetaAtingido,
+                FaseAtual: "Etapa 1 (Acumulação)",
+                MesesRestantes: dadosPrevisao.MesesRestantes,     // Vindo da Query
+                DataEstimadaMeta: dadosPrevisao.DataAtingimentoMeta, // Vindo da Query
+                UltimasMovimentacoes: movimentacoesHoje
+            );
 
-                var ultimoHistorico = await dbContext.HistoricoPatrimonios
-                    .OrderByDescending(h => h.Data)
-                    .FirstOrDefaultAsync(token);
+            var mensagemIA = await aiService.GerarRelatorioDiarioAsync(contextoDTO);
 
-                decimal patrimonioOntem = ultimoHistorico?.ValorTotal ?? dadosAtuais.PatrimonioAtual;
-                decimal variacao = dadosAtuais.PatrimonioAtual - patrimonioOntem;
+            var mensagemTraduzida = _translationClient.TranslateText(
+                mensagemIA,
+                targetLanguage: "pt",
+                sourceLanguage: "en"
+            ).TranslatedText;
 
-                var movimentacoesHoje = await dbContext.Transacoes
-                    .Where(t => t.Data.Date == DateTime.Today)
-                    .Select(t => $"{t.TipoTransacao}: {t.ValorTotal:C}")
-                    .ToListAsync(token);
+            await sender.Send(new EnviarNotificacaoCommand()
+            {
+                Title = "Bom dia amor",
+                Message = mensagemTraduzida,
+                Priority = NotificacaoPrioridade.Default,
+                Tags = ["seedling"]
+            }, token);
 
-                var contextoDTO = new ContextoFinanceiroDto(
-                    NomeUsuario: "Caio",
-                    NomeConjuge: "Letícya",
-                    PatrimonioTotal: dadosAtuais.PatrimonioAtual,
-                    MetaRenda: previsaoQuery.MetaRendaMensal,
-                    RendaAtual: dadosAtuais.RendaPassivaAtual,
-                    VariacaoDiaria: variacao,
-                    FaseAtual: "Etapa 1 (Acumulação)",
-                    UltimasMovimentacoes: movimentacoesHoje
-                );
-
-                var mensagemIA = await aiService.GerarRelatorioDiarioAsync(contextoDTO);
-
-                await sender.Send(new EnviarNotificacaoCommand(
-                    "Fechamento Diário 🌙",
-                    mensagemIA
-                ), token);
-
-                var novoHistorico = new HistoricoPatrimonio
-                {
-                    Data = DateTime.UtcNow,
-                    ValorTotal = dadosAtuais.PatrimonioAtual,
-                    RendaPassivaCalculada = dadosAtuais.RendaPassivaAtual
-                };
-
-                dbContext.HistoricoPatrimonios.Add(novoHistorico);
-                await dbContext.SaveChangesAsync(token);
-
-                _logger.LogInformation("Fechamento diário concluído e histórico salvo.");
-            }
+            _logger.LogInformation("Relatório diário gerado e enviado.");
         }
     }
 }

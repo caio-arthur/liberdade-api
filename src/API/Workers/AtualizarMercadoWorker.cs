@@ -1,9 +1,15 @@
 ﻿using Application.Common.Interfaces;
+using Application.Handlers.Feriados.Queries.EhDiaUtil;
+using Core.Entities;
+using Core.Enums;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,103 +19,224 @@ namespace API.Workers
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<AtualizarMercadoWorker> _logger;
-        private readonly TimeSpan _periodoAtualizacao = TimeSpan.FromHours(12); // Roda a cada 12h
+        private readonly string _codigoSelic;
+        private readonly ISender _mediator;
+        // Define o horário de execução (08:00)
+        private readonly TimeSpan _horarioAlvo = new(8, 0, 0);
 
-        public AtualizarMercadoWorker(IServiceProvider serviceProvider, ILogger<AtualizarMercadoWorker> logger)
+        public AtualizarMercadoWorker(IServiceProvider serviceProvider, ILogger<AtualizarMercadoWorker> logger, IConfiguration config, ISender mediator)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
+            _codigoSelic = config["BancoCentral:CodigoIsinSelic2031"] ?? "BRSTNCLF1RU6";
+            _mediator = mediator;
         }
+
+        // debug
+        //protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        //{
+        //    // Executa a atualização uma vez ao iniciar o serviço
+        //    return ProcessarAtualizacaoAsync(stoppingToken);
+        //}
+
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("AtualizarMercadoWorker iniciado.");
+            _logger.LogInformation("Worker de Atualização de Mercado iniciado.");
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await AtualizarAtivosAsync(stoppingToken);
+                    var agora = DateTime.Now;
+                    var proximaExecucao = agora.Date.Add(_horarioAlvo);
+
+                    // Se já passou das 18h hoje, agenda para amanhã
+                    if (agora > proximaExecucao)
+                        proximaExecucao = proximaExecucao.AddDays(1);
+
+                    var tempoEspera = proximaExecucao - agora;
+                    _logger.LogInformation("Próxima execução agendada para: {Data} (Espera: {Tempo})", proximaExecucao, tempoEspera);
+
+                    // Aguarda até o horário agendado
+                    await Task.Delay(tempoEspera, stoppingToken);
+
+                    if (stoppingToken.IsCancellationRequested) break;
+
+                    // Verifica se é dia útil antes de rodar a lógica pesada
+                    bool ehDiaUtil;
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+                        var ehDiaUtilResponse = await mediator.Send(new EhDiaUtilQuery { Data = DateTime.Today }, stoppingToken);
+                        ehDiaUtil = ehDiaUtilResponse.Dados;
+                    }
+
+                    if (ehDiaUtil)
+                    {
+                        await ProcessarAtualizacaoAsync(stoppingToken);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Fim de semana detectado. Pulando atualização.");
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Falha crítica no Worker de atualização.");
+                    _logger.LogError(ex, "Erro crítico no loop do Worker.");
+                    await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
                 }
-
-                await Task.Delay(_periodoAtualizacao, stoppingToken);
             }
         }
 
-        private async Task AtualizarAtivosAsync(CancellationToken cancellationToken)
+        private async Task ProcessarAtualizacaoAsync(CancellationToken cancellationToken)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            _logger.LogInformation("Iniciando processamento de atualização de ativos...");
+
+            using var scope = _serviceProvider.CreateScope();
             {
+                var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
                 var marketService = scope.ServiceProvider.GetRequiredService<IDadosMercadoService>();
-                var dbContext = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
 
-                var ativos = await dbContext.Ativos.ToListAsync(cancellationToken);
+                var ativos = await context.Ativos.ToListAsync(cancellationToken);
+                var posicoesCarteira = await context.PosicaoCarteiras.ToListAsync(cancellationToken);
 
-                var taxaSelicMensal = await marketService.ObterTaxaSelicAtualAsync();
+                var taxaSelicMensalEstimada = await marketService.ObterTaxaSelicAtualAsync();
 
+                bool precisaSalvar = false;
+                var dataAtual = DateTime.Now;
+
+                // --- ETAPA 1: ATUALIZAÇÃO DE PREÇOS DOS ATIVOS ---
                 foreach (var ativo in ativos)
                 {
-                    // Verifica se o ativo já foi atualizado hoje
-                    if (ativo.AtualizadoEm.Date >= DateTime.UtcNow.Date)
+                    if (ativo.AtualizadoEm.Date >= DateTime.UtcNow.Date) continue;
+
+                    bool ehSelic = ativo.Codigo.ToUpper().Contains(_codigoSelic) || ativo.Categoria == AtivoCategoria.RendaFixaLiquidez;
+                    bool ehFii = ativo.Categoria.ToString().StartsWith("Fii");
+
+                    decimal? novoPreco = null;
+                    DateTime? dataReferenciaPreco = null;
+
+                    if (ehSelic)
                     {
-                        _logger.LogInformation("Ativo {Codigo} já foi atualizado hoje. Pulando...", ativo.Codigo);
-                        continue;
-                    }
+                        var (precoTesouro, dataTesouro) = await marketService.ObterPrecoTesouroDiretoBcbAsync(ativo.Codigo, dataAtual.Year, dataAtual.Month);
 
-                    bool houveAtualizacao = false;
+                        novoPreco = precoTesouro;
+                        dataReferenciaPreco = dataTesouro;
 
-                    if (ativo.Codigo.Contains("SELIC", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var precoTesouro = await marketService.ObterPrecoTesouroDiretoAsync("Tesouro-Selic-2031");
-
-                        if (precoTesouro.HasValue)
+                        if (taxaSelicMensalEstimada.HasValue)
                         {
-                            ativo.PrecoAtual = precoTesouro.Value; 
-                            houveAtualizacao = true;
-                        }
+                            ativo.PercentualDeRetornoMensalEsperado = taxaSelicMensalEstimada.Value;
+                            precisaSalvar = true;
 
-                        if (taxaSelicMensal.HasValue) 
-                        {
-                            ativo.PercentualDeRetornoMensalEsperado = taxaSelicMensal.Value;
-
-                            ativo.RendimentoValorMesAnterior = ativo.PrecoAtual * (taxaSelicMensal.Value / 100m);
-
-                            houveAtualizacao = true;
+                            if (novoPreco.HasValue)
+                            {
+                                // Cálculo da Renda ($) = Valor investido * (Taxa% / 100)
+                                ativo.RendimentoValorMesAnterior = novoPreco.Value * (taxaSelicMensalEstimada.Value / 100m);
+                            }
                         }
                     }
-                    else if (ativo.Categoria.ToString().StartsWith("Fii")) 
+                    else if (ehFii)
                     {
-                        var dadosFii = await marketService.ObterDadosFiiAsync(ativo.Codigo); 
-
+                        var dadosFii = await marketService.ObterDadosFiiAsync(ativo.Codigo);
                         if (dadosFii.HasValue)
                         {
-                            ativo.PrecoAtual = dadosFii.Value.Preco;
+                            novoPreco = dadosFii.Value.Preco;
+                            dataReferenciaPreco = DateTime.UtcNow;
+
                             ativo.RendimentoValorMesAnterior = dadosFii.Value.UltimoRendimento;
+                            precisaSalvar = true;
 
-                            if (ativo.PrecoAtual > 0)
-                            {
-                                ativo.PercentualDeRetornoMensalEsperado = (ativo.RendimentoValorMesAnterior / ativo.PrecoAtual) * 100;
-                            }
-
-                            houveAtualizacao = true;
+                            if (novoPreco > 0)
+                                ativo.PercentualDeRetornoMensalEsperado = (ativo.RendimentoValorMesAnterior / novoPreco.Value) * 100;
                         }
                     }
 
-                    if (houveAtualizacao)
+                    // Se encontrou preço novo, atualiza
+                    if (novoPreco.HasValue && novoPreco.Value > 0)
                     {
-                        ativo.AtualizadoEm = DateTime.UtcNow;
+                        ativo.PrecoAtual = novoPreco.Value;
+                        ativo.AtualizadoEm = dataReferenciaPreco ?? DateTime.UtcNow;
+
+                        precisaSalvar = true;
+                        _logger.LogInformation("Ativo {Codigo} atualizado para R$ {Preco} com data base {Data}", ativo.Codigo, ativo.PrecoAtual, ativo.AtualizadoEm);
                     }
                 }
 
-                await dbContext.SaveChangesAsync(cancellationToken);
+                if (precisaSalvar)
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                }
 
-                _logger.LogInformation("Cotações atualizadas com sucesso em {Data}", DateTime.Now);
+                // --- ETAPA 2: ATUALIZAÇÃO DAS POSIÇÕES DA CARTEIRA ---
+                var ativosDict = ativos.ToDictionary(a => a.Codigo, a => a);
+
+                if (precisaSalvar)
+                {
+                    foreach (var posicao in posicoesCarteira)
+                    {
+                        if (ativosDict.TryGetValue(posicao.Codigo, out var ativoAtualizado))
+                        {
+                            posicao.PrecoAtual = ativoAtualizado.PrecoAtual;
+                            posicao.PrecoMedio = ativoAtualizado.PrecoAtual;
+                        }
+                    }
+                }
+
+                // --- ETAPA 3: GERAÇÃO DE HISTÓRICO DIÁRIO ---
+                bool historicoExiste = await context.HistoricoPatrimonios
+                    .AnyAsync(h => h.Data.Date == DateTime.UtcNow.Date, cancellationToken);
+
+                if (!historicoExiste)
+                {
+                    decimal patrimonioTotal = posicoesCarteira.Sum(p => p.Quantidade * p.PrecoAtual);
+                    decimal rendaPassivaEstimada = 0;
+
+                    foreach (var pos in posicoesCarteira)
+                    {
+                        if (ativosDict.TryGetValue(pos.Codigo, out var ativoRef))
+                        {
+                            if (ativoRef.Codigo.ToUpper().Contains(_codigoSelic) || ativoRef.Categoria == AtivoCategoria.RendaFixaLiquidez)
+                            {
+                                decimal valorAlocado = pos.Quantidade * pos.PrecoAtual;
+                                decimal taxaDecimal = ativoRef.PercentualDeRetornoMensalEsperado / 100m;
+                                rendaPassivaEstimada += valorAlocado * taxaDecimal;
+                            }
+                            else
+                            {
+                                rendaPassivaEstimada += pos.Quantidade * ativoRef.RendimentoValorMesAnterior;
+                            }
+                        }
+                    }
+
+                    var historico = new HistoricoPatrimonio
+                    {
+                        Id = Guid.NewGuid(),
+                        Data = DateTime.UtcNow, // Snapshot do momento
+                        ValorTotal = patrimonioTotal,
+                        RendaPassivaCalculada = rendaPassivaEstimada
+                    };
+
+                    context.HistoricoPatrimonios.Add(historico);
+                    precisaSalvar = true;
+
+                    _logger.LogInformation("Histórico diário gerado. Patrimônio: {Total:C} | Renda Est.: {Renda:C}", patrimonioTotal, rendaPassivaEstimada);
+                }
+                else
+                {
+                    _logger.LogInformation("Histórico para a data de hoje já existe.");
+                }
+
+                if (precisaSalvar)
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                    _logger.LogInformation("Ciclo de atualização concluído com sucesso.");
+                }
             }
         }
     }
 }
-

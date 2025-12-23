@@ -1,16 +1,18 @@
 using API.ExceptionHandlers;
 using API.Workers;
 using Application;
-using Application.Common.Interfaces;
+using Google.Apis.Auth.OAuth2;
+using Google.Cloud.Translation.V2;
 using Infrastructure;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.SeedData;
-using Infrastructure.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.IO;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,10 +20,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddHostedService<DiarioFinanceiroWorker>(); 
-builder.Services.AddScoped<IDadosMercadoService, DadosMercadoService>();
-builder.Services.Configure<NtfyConfigs>(builder.Configuration.GetSection("NtfySettings"));
-builder.Services.AddHttpClient<INotificacaoService, NtfyNotificacaoService>();
+builder.Services.AddHostedService<DiarioFinanceiroWorker>();
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 builder.Services.AddHttpClient("StatusInvest", client =>
 {
@@ -33,6 +33,23 @@ builder.Services.AddHttpClient("BCB", client =>
 {
     client.BaseAddress = new Uri("https://api.bcb.gov.br/");
     client.DefaultRequestHeaders.Add("User-Agent", "LiberdadeApi/1.0");
+});
+
+var googleCredentialPath = builder.Configuration["GoogleCloud:GoogleCredentialPath"];
+
+if (string.IsNullOrEmpty(googleCredentialPath) || !File.Exists(googleCredentialPath))
+{
+    throw new FileNotFoundException(
+            $"CRÍTICO: O arquivo de credenciais do Google não foi encontrado. " +
+            $"Verifique se a configuração 'GoogleCloud' aponta para um arquivo válido. " +
+            $"Caminho tentado: '{googleCredentialPath}'");
+}
+
+builder.Services.AddSingleton(sp =>
+{
+    var credential = CredentialFactory.FromFile<ServiceAccountCredential>(googleCredentialPath)
+                                  .ToGoogleCredential();
+    return TranslationClient.Create(credential);
 });
 
 builder.Services.AddHostedService<AtualizarMercadoWorker>();
@@ -70,7 +87,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection(); 
+app.UseHttpsRedirection();
 app.MapControllers();
 
 app.Run();

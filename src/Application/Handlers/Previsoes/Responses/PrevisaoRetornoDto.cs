@@ -5,14 +5,10 @@
         public decimal PatrimonioAtual { get; set; }
         public decimal RendaPassivaAtual { get; set; }
         public decimal MetaRendaMensal { get; set; }
-
-        // O resultado principal
         public DateTime DataAtingimentoMeta { get; set; }
-        public int MesesRestantes { get; set; }
+        public int MesesRestantes { get; set; } // Mantemos para fácil leitura
         public decimal PatrimonioNecessario { get; set; }
-
-        // Para gráficos (opcional, mas útil)
-        public List<EvolucaoMesDto> EvolucaoMensal { get; set; } = new();
+        public List<EvolucaoPontoDto> EvolucaoDiaria { get; set; } = new();
     }
 }
 

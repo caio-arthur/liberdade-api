@@ -6,5 +6,6 @@
         public DateTime Data { get; set; }
         public decimal PatrimonioAcumulado { get; set; }
         public decimal RendaGerada { get; set; }
+        public decimal RendaDiaria { get; set; }
     }
 }

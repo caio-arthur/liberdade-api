@@ -1,0 +1,17 @@
+services:
+  liberdade-app:
+    build: .
+    container_name: liberdade_api
+    restart: always
+    ports:
+      - "80:8080"
+    volumes:
+      - ./dados_banco:/app/data
+      - ./secrets/google-credentials.json:/app/secrets/google-credentials.json
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__SqliteConnection=Data Source=/app/data/liberdade.db
+      - NtfySettings__DefaultTopic=${NTFY_TOPIC}
+      - OpenRouter__ApiKey=${OPENROUTER_KEY}
+      - ApiInvertexto__Key=${INVERTEXTO_KEY}
+      - GoogleCloud__GoogleCredentialPath=/app/secrets/google-credentials.json
