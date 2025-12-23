@@ -100,7 +100,7 @@ namespace Infrastructure.Services
             return null;
         }
 
-        public async Task<decimal?> ObterPrecoTesouroDiretoBcbAsync(string codigoIsin, int ano, int mes)
+        public async Task<(decimal? preco, DateTime? atualizadoEm)> ObterPrecoTesouroDiretoBcbAsync(string codigoIsin, int ano, int mes)
         {
             var url = $"http://www4.bcb.gov.br/pom/demab/negociacoes/download/NegE{ano}{mes:D2}.ZIP";
 
@@ -113,7 +113,7 @@ namespace Infrastructure.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("Falha ao baixar ZIP do BCB. Status: {Status}. URL: {Url}", response.StatusCode, url);
-                    return null;
+                    return (null, null);
                 }
 
                 using var stream = await response.Content.ReadAsStreamAsync();
@@ -124,44 +124,53 @@ namespace Infrastructure.Services
                 if (csvEntry == null)
                 {
                     _logger.LogWarning("CSV não encontrado no ZIP: {Url}", url);
-                    return null;
+                    return (null, null);
                 }
 
                 using var entryStream = csvEntry.Open();
+                // O encoding ISO-8859-1 é padrão para arquivos antigos do governo/bancos no BR
                 using var reader = new StreamReader(entryStream, Encoding.GetEncoding("ISO-8859-1"));
 
                 string? headerLine = await reader.ReadLineAsync();
-                if (string.IsNullOrEmpty(headerLine)) return null;
+                if (string.IsNullOrEmpty(headerLine)) return (null, null);
 
                 var headers = headerLine.Split(';');
                 int indexData = Array.IndexOf(headers, "DATA MOV");
                 int indexIsin = Array.IndexOf(headers, "CODIGO ISIN");
                 int indexPu = Array.IndexOf(headers, "PU MED");
 
+                // Fallback caso o header não seja encontrado exatamente com esses nomes
                 if (indexIsin == -1 || indexPu == -1)
                 {
-                    indexData = 0; indexIsin = 1; indexPu = 3;
+                    indexData = 0; indexIsin = 3; indexPu = 9; // Ajustei indices baseados no padrão visual do CSV se o header falhar, mas o ideal é confiar no header
                 }
 
                 decimal? ultimoPuEncontrado = null;
-                DateTime dataMaisRecente = DateTime.MinValue;
+                DateTime? dataMaisRecenteEncontrada = null; // Mudado para Nullable para facilitar o retorno
+
                 var culturaBr = new CultureInfo("pt-BR");
 
                 string? line;
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
                     var colunas = line.Split(';');
-                    if (colunas.Length <= indexPu) continue;
 
+                    // Garante que a linha tem colunas suficientes antes de acessar
+                    if (colunas.Length <= indexPu || colunas.Length <= indexIsin) continue;
+
+                    // Verifica o ISIN
                     if (colunas[indexIsin].Trim().Equals(codigoIsin, StringComparison.OrdinalIgnoreCase))
                     {
+                        // Tenta fazer o parse da Data
                         if (DateTime.TryParse(colunas[indexData], culturaBr, DateTimeStyles.None, out var dataMov))
                         {
-                            if (dataMov >= dataMaisRecente)
+                            // Lógica: Queremos o registro mais recente disponível no arquivo
+                            // Se dataMaisRecenteEncontrada for null, é o primeiro registro válido, então aceita.
+                            if (dataMaisRecenteEncontrada == null || dataMov >= dataMaisRecenteEncontrada.Value)
                             {
                                 if (decimal.TryParse(colunas[indexPu], NumberStyles.Number, culturaBr, out var puMed))
                                 {
-                                    dataMaisRecente = dataMov;
+                                    dataMaisRecenteEncontrada = dataMov;
                                     ultimoPuEncontrado = puMed;
                                 }
                             }
@@ -169,15 +178,14 @@ namespace Infrastructure.Services
                     }
                 }
 
-                return ultimoPuEncontrado;
+                return (ultimoPuEncontrado, dataMaisRecenteEncontrada);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao processar Título ISIN: {Isin}", codigoIsin);
-                return null;
+                return (null, null);
             }
         }
-
 
         public async Task<(decimal Preco, decimal UltimoRendimento)?> ObterDadosFiiAsync(string ticker)
         {

@@ -1,6 +1,7 @@
 ﻿using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.Common.Wrappers;
+using Application.Handlers.Feriados.Queries.ObterDiasUteisPorMes;
 using Application.Handlers.Previsoes.Responses;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -19,12 +20,14 @@ namespace Application.Handlers.Previsoes.Queries
         private readonly IApplicationDbContext _context;
         private readonly IFeriadosNacionaisService _feriados;
         private readonly string _codigoSelic;
+        private readonly ISender _mediator;
 
-        public GetPrevisaoQueryHandler(IApplicationDbContext context, IFeriadosNacionaisService feriados, IConfiguration config)
+        public GetPrevisaoQueryHandler(IApplicationDbContext context, IFeriadosNacionaisService feriados, IConfiguration config, ISender mediator)
         {
             _context = context;
             _feriados = feriados;
             _codigoSelic = config["BancoCentral:CodigoIsinSelic2031"] ?? "BRSTNCLF1RU6";
+            _mediator = mediator;
         }
 
         public async Task<Response<PrevisaoRetornoDto>> Handle(GetPrevisaoQuery request, CancellationToken cancellationToken)
@@ -41,16 +44,20 @@ namespace Application.Handlers.Previsoes.Queries
                 .FirstOrDefault();
 
             decimal taxaMensal = (ativoReferencia?.PercentualDeRetornoMensalEsperado ?? 0.85m) / 100;
-
             if (taxaMensal <= 0) taxaMensal = 0.0085m;
-
-            double taxaDiariaDouble = Math.Pow((double)(1 + taxaMensal), 1.0 / 21.0) - 1;
-            decimal taxaDiaria = (decimal)taxaDiariaDouble;
 
             var hoje = DateTime.Today;
             var dataInicio = hoje;
 
-            var dataFimMesAtual = dataInicio.AddMonths(1).AddDays(-1);
+            var diasUteisQueryResult = await _mediator.Send(new ObterDiasUteisPorMesQuery() { Ano = hoje.Year, Mes = hoje.Month, Uf = "MG" }, cancellationToken);
+            int diasUteisEsteMes = diasUteisQueryResult.Dados;
+
+            int divisorDias = diasUteisEsteMes > 0 ? diasUteisEsteMes : 21;
+
+            double taxaDiariaDouble = Math.Pow((double)(1 + taxaMensal), 1.0 / divisorDias) - 1;
+            decimal taxaDiaria = (decimal)taxaDiariaDouble;
+
+            var dataFimMesAtual = new DateTime(hoje.Year, hoje.Month, 1).AddMonths(1).AddDays(-1);
 
             decimal patrimonioNecessario = request.MetaRendaMensal / taxaMensal;
 
@@ -71,8 +78,8 @@ namespace Application.Handlers.Previsoes.Queries
             }
 
             decimal saldoSimulado = patrimonioTotal;
-            DateTime dataSimulada = dataInicio;
-            int diasDecorridos = 1;
+
+            DateTime dataSimulada = dataInicio.AddDays(1);
 
             var feriadosNacionais = await _feriados.GetFeriadosNacionaisPorEstadoUfEAno("MG", hoje.Year, cancellationToken);
             if (dataFimMesAtual.Year > hoje.Year)
@@ -94,28 +101,28 @@ namespace Application.Handlers.Previsoes.Queries
                 {
                     saldoSimulado += saldoSimulado * taxaDiaria;
 
+                    int diasCorridosReais = (dataSimulada - dataInicio).Days;
+
                     resposta.EvolucaoDiaria.Add(new EvolucaoPontoDto
                     {
-                        DiasDecorridos = diasDecorridos++,
+                        DiasDecorridos = diasCorridosReais,
                         Data = dataSimulada,
                         PatrimonioAcumulado = Math.Round(saldoSimulado, 2),
                         RendaMensalEstimada = Math.Round(saldoSimulado * taxaMensal, 2)
                     });
                 }
+
                 dataSimulada = dataSimulada.AddDays(1);
             }
 
             decimal saldoProjecao = saldoSimulado;
             int mesesProjecao = 0;
-
             int maxMeses = 1200;
 
             while (saldoProjecao * taxaMensal < request.MetaRendaMensal && mesesProjecao < maxMeses)
             {
                 saldoProjecao += saldoProjecao * taxaMensal;
-
                 saldoProjecao += request.AporteMensal;
-
                 mesesProjecao++;
             }
 

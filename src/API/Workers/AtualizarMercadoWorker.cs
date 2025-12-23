@@ -1,6 +1,8 @@
 ﻿using Application.Common.Interfaces;
+using Application.Handlers.Feriados.Queries.EhDiaUtil;
 using Core.Entities;
 using Core.Enums;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,14 +20,16 @@ namespace API.Workers
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<AtualizarMercadoWorker> _logger;
         private readonly string _codigoSelic;
-        // Define o horário de execução (18:00)
-        private readonly TimeSpan _horarioAlvo = new TimeSpan(18, 0, 0);
+        private readonly ISender _mediator;
+        // Define o horário de execução (08:00)
+        private readonly TimeSpan _horarioAlvo = new(8, 0, 0);
 
-        public AtualizarMercadoWorker(IServiceProvider serviceProvider, ILogger<AtualizarMercadoWorker> logger, IConfiguration config)
+        public AtualizarMercadoWorker(IServiceProvider serviceProvider, ILogger<AtualizarMercadoWorker> logger, IConfiguration config, ISender mediator)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
             _codigoSelic = config["BancoCentral:CodigoIsinSelic2031"] ?? "BRSTNCLF1RU6";
+            _mediator = mediator;
         }
 
         // debug
@@ -34,6 +38,7 @@ namespace API.Workers
         //    // Executa a atualização uma vez ao iniciar o serviço
         //    return ProcessarAtualizacaoAsync(stoppingToken);
         //}
+
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -59,8 +64,15 @@ namespace API.Workers
                     if (stoppingToken.IsCancellationRequested) break;
 
                     // Verifica se é dia útil antes de rodar a lógica pesada
-                    var diaSemana = DateTime.Now.DayOfWeek;
-                    if (diaSemana != DayOfWeek.Saturday && diaSemana != DayOfWeek.Sunday)
+                    bool ehDiaUtil;
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+                        var ehDiaUtilResponse = await mediator.Send(new EhDiaUtilQuery { Data = DateTime.Today }, stoppingToken);
+                        ehDiaUtil = ehDiaUtilResponse.Dados;
+                    }
+
+                    if (ehDiaUtil)
                     {
                         await ProcessarAtualizacaoAsync(stoppingToken);
                     }
@@ -71,13 +83,11 @@ namespace API.Workers
                 }
                 catch (TaskCanceledException)
                 {
-                    // Ignora erro de cancelamento ao parar a aplicação
                     break;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Erro crítico no loop do Worker.");
-                    // Espera 5 minutos antes de tentar recalcular o loop para evitar spam de erro
                     await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
                 }
             }
@@ -87,36 +97,36 @@ namespace API.Workers
         {
             _logger.LogInformation("Iniciando processamento de atualização de ativos...");
 
-            using (var scope = _serviceProvider.CreateScope())
+            using var scope = _serviceProvider.CreateScope();
             {
                 var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
                 var marketService = scope.ServiceProvider.GetRequiredService<IDadosMercadoService>();
 
-                // 1. Carregamento inicial
                 var ativos = await context.Ativos.ToListAsync(cancellationToken);
                 var posicoesCarteira = await context.PosicaoCarteiras.ToListAsync(cancellationToken);
 
-                // Obtém Selic Mensal (ex: 0.92 para 0.92%)
                 var taxaSelicMensalEstimada = await marketService.ObterTaxaSelicAtualAsync();
 
                 bool precisaSalvar = false;
-                var dataAtual = DateTime.Now; // Referência para o Ano/Mês da busca
+                var dataAtual = DateTime.Now;
 
                 // --- ETAPA 1: ATUALIZAÇÃO DE PREÇOS DOS ATIVOS ---
                 foreach (var ativo in ativos)
                 {
-                    // Evita processar se já foi atualizado hoje (idempotência)
                     if (ativo.AtualizadoEm.Date >= DateTime.UtcNow.Date) continue;
 
-                    // Flags de identificação
                     bool ehSelic = ativo.Codigo.ToUpper().Contains(_codigoSelic) || ativo.Categoria == AtivoCategoria.RendaFixaLiquidez;
                     bool ehFii = ativo.Categoria.ToString().StartsWith("Fii");
 
                     decimal? novoPreco = null;
+                    DateTime? dataReferenciaPreco = null;
 
                     if (ehSelic)
                     {
-                        novoPreco = await marketService.ObterPrecoTesouroDiretoBcbAsync(ativo.Codigo, dataAtual.Year, dataAtual.Month);
+                        var (precoTesouro, dataTesouro) = await marketService.ObterPrecoTesouroDiretoBcbAsync(ativo.Codigo, dataAtual.Year, dataAtual.Month);
+
+                        novoPreco = precoTesouro;
+                        dataReferenciaPreco = dataTesouro;
 
                         if (taxaSelicMensalEstimada.HasValue)
                         {
@@ -136,13 +146,13 @@ namespace API.Workers
                         if (dadosFii.HasValue)
                         {
                             novoPreco = dadosFii.Value.Preco;
+                            dataReferenciaPreco = DateTime.UtcNow;
+
                             ativo.RendimentoValorMesAnterior = dadosFii.Value.UltimoRendimento;
                             precisaSalvar = true;
 
-                            // DY Mensal Atualizado
                             if (novoPreco > 0)
                                 ativo.PercentualDeRetornoMensalEsperado = (ativo.RendimentoValorMesAnterior / novoPreco.Value) * 100;
-
                         }
                     }
 
@@ -150,20 +160,19 @@ namespace API.Workers
                     if (novoPreco.HasValue && novoPreco.Value > 0)
                     {
                         ativo.PrecoAtual = novoPreco.Value;
-                        ativo.AtualizadoEm = DateTime.UtcNow; // Padronizar UTC no banco
+                        ativo.AtualizadoEm = dataReferenciaPreco ?? DateTime.UtcNow;
+
                         precisaSalvar = true;
-                        _logger.LogInformation("Ativo {Codigo} atualizado para R$ {Preco}", ativo.Codigo, ativo.PrecoAtual);
+                        _logger.LogInformation("Ativo {Codigo} atualizado para R$ {Preco} com data base {Data}", ativo.Codigo, ativo.PrecoAtual, ativo.AtualizadoEm);
                     }
                 }
 
                 if (precisaSalvar)
                 {
-                    // Salva alterações nos ativos antes de recalcular carteira
                     await context.SaveChangesAsync(cancellationToken);
                 }
 
                 // --- ETAPA 2: ATUALIZAÇÃO DAS POSIÇÕES DA CARTEIRA ---
-                // Recarrega dicionário local com os dados atualizados em memória
                 var ativosDict = ativos.ToDictionary(a => a.Codigo, a => a);
 
                 if (precisaSalvar)
@@ -176,7 +185,6 @@ namespace API.Workers
                             posicao.PrecoMedio = ativoAtualizado.PrecoAtual;
                         }
                     }
-                    // Não salva ainda, espera o histórico
                 }
 
                 // --- ETAPA 3: GERAÇÃO DE HISTÓRICO DIÁRIO ---
@@ -192,7 +200,6 @@ namespace API.Workers
                     {
                         if (ativosDict.TryGetValue(pos.Codigo, out var ativoRef))
                         {
-                            // Lógica de projeção de renda
                             if (ativoRef.Codigo.ToUpper().Contains(_codigoSelic) || ativoRef.Categoria == AtivoCategoria.RendaFixaLiquidez)
                             {
                                 decimal valorAlocado = pos.Quantidade * pos.PrecoAtual;
@@ -201,7 +208,6 @@ namespace API.Workers
                             }
                             else
                             {
-                                // Para FIIs/Ações: Qtd * Dividendos por ação (RendimentoValorMesAnterior)
                                 rendaPassivaEstimada += pos.Quantidade * ativoRef.RendimentoValorMesAnterior;
                             }
                         }
@@ -210,7 +216,7 @@ namespace API.Workers
                     var historico = new HistoricoPatrimonio
                     {
                         Id = Guid.NewGuid(),
-                        Data = DateTime.UtcNow,
+                        Data = DateTime.UtcNow, // Snapshot do momento
                         ValorTotal = patrimonioTotal,
                         RendaPassivaCalculada = rendaPassivaEstimada
                     };

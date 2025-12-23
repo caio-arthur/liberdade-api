@@ -63,5 +63,15 @@ namespace Infrastructure.Services
             return feriadosDto;
         }
 
+        public async Task<bool> EhDiaUtilAsync(DateTime data, string uf, CancellationToken cancellationToken = default)
+        {
+            if (data.DayOfWeek == DayOfWeek.Saturday || data.DayOfWeek == DayOfWeek.Sunday)
+            {
+                return false;
+            }
+            var feriados = await GetFeriadosNacionaisPorEstadoUfEAno(uf, data.Year, cancellationToken);
+            return !feriados.Any(f => f.Data.Date == data.Date);
+        }
+
     }
 }

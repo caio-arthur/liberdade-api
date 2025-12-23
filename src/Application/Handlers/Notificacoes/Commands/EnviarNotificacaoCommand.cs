@@ -13,14 +13,6 @@ namespace Application.Handlers.Notificacoes.Commands
         public NotificacaoPrioridade Priority { get; set; } = NotificacaoPrioridade.Default;
         public List<string> Tags { get; set; } = new();
         public List<NotificacaoAcao> Actions { get; set; } = new();
-
-        public EnviarNotificacaoCommand(string title, string message, NotificacaoPrioridade priority = NotificacaoPrioridade.Default)
-        {
-            Title = title;
-            Message = message;
-            Priority = priority;
-        }
-
     }
 
     public class EnviarNotificacaoHandler : IRequestHandler<EnviarNotificacaoCommand, Response>

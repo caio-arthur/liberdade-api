@@ -15,6 +15,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure", "src\Infra
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution_items", "solution_items", "{FE9860D1-A5B8-46FA-8426-2FA79A4C2F50}"
 	ProjectSection(SolutionItems) = preProject
+		.env = .env
+		.gitignore = .gitignore
+		docker-compose.yml = docker-compose.yml
+		Dockerfile = Dockerfile
+		google-credentials.json = google-credentials.json
+		dados_banco\liberdade.db = dados_banco\liberdade.db
 		README.md = README.md
 	EndProjectSection
 EndProject
