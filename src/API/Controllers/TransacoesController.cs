@@ -3,12 +3,14 @@ using Application.Handlers.Transacoes.Commands.RealizarCompra;
 using Application.Handlers.Transacoes.Commands.RegistrarAporte;
 using Application.Handlers.Transacoes.Commands.UpdateTransacao;
 using Application.Handlers.Transacoes.Queries;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
 
 namespace API.Controllers
 {
+    [Authorize]
     [Route("api/transacoes")]
     [ApiController]
     public class TransacoesController : ApiControllerBase
@@ -20,6 +22,7 @@ namespace API.Controllers
             return HandleResult(result);
         }
 
+        
         [HttpPost("aporte")]
         public async Task<IActionResult> RegistrarAporte(RegistrarAporteCommand command)
         {
@@ -27,6 +30,7 @@ namespace API.Controllers
             return HandleResult(result);
         }
 
+        
         [HttpPost("compra")]
         public async Task<IActionResult> RealizarCompra(RealizarCompraCommand command)
         {
@@ -34,6 +38,7 @@ namespace API.Controllers
             return HandleResult(result);
         }
 
+        
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateTransacao(Guid id, UpdateTransacaoCommand command)
         {
@@ -42,6 +47,7 @@ namespace API.Controllers
             return HandleResult(result);
         }
 
+        
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTransacao(Guid id)
         {

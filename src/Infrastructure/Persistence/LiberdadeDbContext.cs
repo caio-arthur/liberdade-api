@@ -1,12 +1,13 @@
 ﻿using Application.Common.Interfaces;
 using Core.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 
 namespace Infrastructure.Persistence
 {
 
-    public class LiberdadeDbContext : DbContext, IApplicationDbContext
+    public class LiberdadeDbContext : IdentityDbContext, IApplicationDbContext
     {
         public LiberdadeDbContext(DbContextOptions<LiberdadeDbContext> options) : base(options)
         {
@@ -22,6 +23,7 @@ namespace Infrastructure.Persistence
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            base.OnModelCreating(modelBuilder);
             modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         }
     }
