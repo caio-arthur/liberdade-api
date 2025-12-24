@@ -13,7 +13,9 @@ namespace Application.Handlers.HistoricosPatrimonio.Responses
 
         public void Mapping(MappingProfile profile)
         {
-            profile.CreateMap<HistoricoPatrimonio, HistoricoPatrimonioDto>();
+            profile.CreateMap<HistoricoPatrimonio, HistoricoPatrimonioDto>()
+                .ForMember(d => d.Valor , opt => opt.MapFrom(s => s.ValorTotal))
+                ;
         }
     }
 }

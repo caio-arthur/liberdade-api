@@ -21,6 +21,7 @@ namespace Infrastructure
             services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<LiberdadeDbContext>());
             services.AddHttpClient<IFeriadosNacionaisService, FeriadosNacionaisService>();
             services.AddTransient<IAgenteFinanceiroService, OpenRouterAgentService>();
+            services.AddSingleton<ITranslationService, GoogleTranslationService>();
 
             return services;
         }
