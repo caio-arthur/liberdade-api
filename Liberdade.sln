@@ -19,7 +19,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution_items", "solution_
 		.gitignore = .gitignore
 		docker-compose.yml = docker-compose.yml
 		Dockerfile = Dockerfile
-		google-credentials.json = google-credentials.json
+		secrets\google-credentials.json = secrets\google-credentials.json
 		dados_banco\liberdade.db = dados_banco\liberdade.db
 		README.md = README.md
 	EndProjectSection
