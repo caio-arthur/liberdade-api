@@ -25,7 +25,7 @@ namespace API.Controllers
             _configuration = configuration;
         }
 
-        [HttpPost("login")] // A rota final será: POST /api/auth/login
+        [HttpPost("login")] 
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
@@ -45,7 +45,6 @@ namespace API.Controllers
                     authClaims.Add(new Claim(ClaimTypes.Role, role));
                 }
 
-                // Geração do Token
                 var keyString = _configuration["Jwt:Key"];
                 if (string.IsNullOrEmpty(keyString))
                 {
