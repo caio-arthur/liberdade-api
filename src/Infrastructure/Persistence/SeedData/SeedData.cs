@@ -38,63 +38,74 @@ namespace Infrastructure.Persistence.SeedData
                 context.SaveChanges();
             }
 
-            if (!context.Transacoes.Any())
-            {
-                var ativoSelic2031 = context.Ativos.First(a => a.Codigo == "BRSTNCLF1RU6");
+            //if (!context.Transacoes.Any())
+            //{
+            //    var ativoSelic2031 = context.Ativos.First(a => a.Codigo == "BRSTNCLF1RU6");
 
-                context.Transacoes.AddRange(
-                    new Transacao
-                    {
-                        AtivoId = ativoSelic2031.Id,
-                        TipoTransacao = TransacaoTipo.Compra,
-                        Quantidade = 0.41m,
-                        PrecoUnitario = 17420.60m,
-                        ValorTotal = 7142.446m,
-                        Data = new DateTime(2025, 10, 07),
-                        Observacoes = "Compra de SELIC2031"
-                    },
-                    new Transacao
-                    {
-                        AtivoId = ativoSelic2031.Id,
-                        TipoTransacao = TransacaoTipo.Compra,
-                        Quantidade = 0.06m,
-                        PrecoUnitario = 17518.23m,
-                        ValorTotal = 1051.0938m,
-                        Data = new DateTime(2025, 10, 21),
-                        Observacoes = "Compra de SELIC2031"
-                    },
-                    new Transacao
-                    {
-                        AtivoId = ativoSelic2031.Id,
-                        TipoTransacao = TransacaoTipo.Compra,
-                        Quantidade = 0.04m,
-                        PrecoUnitario = 17655.03m,
-                        ValorTotal = 706.2012m,
-                        Data = new DateTime(2025, 11, 10),
-                        Observacoes = "Compra de SELIC2031"
-                    },
-                    new Transacao
-                    {
-                        AtivoId = ativoSelic2031.Id,
-                        TipoTransacao = TransacaoTipo.Compra,
-                        Quantidade = 0.06m,
-                        PrecoUnitario = 17734.17m,
-                        ValorTotal = 1064.0502m,
-                        Data = new DateTime(2025, 11, 21),
-                        Observacoes = "Compra de SELIC2031"
-                    },
-                    new Transacao
-                    {
-                        AtivoId = ativoSelic2031.Id,
-                        TipoTransacao = TransacaoTipo.Compra,
-                        Quantidade = 0.04m,
-                        PrecoUnitario = 17830.23m,
-                        ValorTotal = 713.2092m,
-                        Data = new DateTime(2025, 12, 05),
-                        Observacoes = "Compra de SELIC2031"
-                    }
-                );
-            }
+            //    context.Transacoes.AddRange(
+            //        new Transacao
+            //        {
+            //            AtivoId = ativoSelic2031.Id,
+            //            TipoTransacao = TransacaoTipo.Compra,
+            //            Quantidade = 0.41m,
+            //            PrecoUnitario = 17420.60m,
+            //            ValorTotal = 7142.446m,
+            //            Data = new DateTime(2025, 10, 07),
+            //            Observacoes = "Compra de SELIC2031"
+            //        },
+            //        new Transacao
+            //        {
+            //            AtivoId = ativoSelic2031.Id,
+            //            TipoTransacao = TransacaoTipo.Compra,
+            //            Quantidade = 0.06m,
+            //            PrecoUnitario = 17518.23m,
+            //            ValorTotal = 1051.0938m,
+            //            Data = new DateTime(2025, 10, 21),
+            //            Observacoes = "Compra de SELIC2031"
+            //        },
+            //        new Transacao
+            //        {
+            //            AtivoId = ativoSelic2031.Id,
+            //            TipoTransacao = TransacaoTipo.Compra,
+            //            Quantidade = 0.04m,
+            //            PrecoUnitario = 17655.03m,
+            //            ValorTotal = 706.2012m,
+            //            Data = new DateTime(2025, 11, 10),
+            //            Observacoes = "Compra de SELIC2031"
+            //        },
+            //        new Transacao
+            //        {
+            //            AtivoId = ativoSelic2031.Id,
+            //            TipoTransacao = TransacaoTipo.Compra,
+            //            Quantidade = 0.06m,
+            //            PrecoUnitario = 17734.17m,
+            //            ValorTotal = 1064.0502m,
+            //            Data = new DateTime(2025, 11, 21),
+            //            Observacoes = "Compra de SELIC2031"
+            //        },
+            //        new Transacao
+            //        {
+            //            AtivoId = ativoSelic2031.Id,
+            //            TipoTransacao = TransacaoTipo.Compra,
+            //            Quantidade = 0.04m,
+            //            PrecoUnitario = 17830.23m,
+            //            ValorTotal = 713.2092m,
+            //            Data = new DateTime(2025, 12, 05),
+            //            Observacoes = "Compra de SELIC2031"
+            //        },
+            //        new Transacao
+            //        {
+            //            AtivoId = ativoSelic2031.Id,
+            //            TipoTransacao = TransacaoTipo.Compra,
+            //            Quantidade = 0.05m,
+            //            PrecoUnitario = 17942.34m,
+            //            ValorTotal = 897.11m,
+            //            Data = new DateTime(2025, 12, 22),
+            //            Observacoes = "Compra de SELIC2031"
+            //        }
+            //    );
+            //    context.SaveChanges();
+            //}
         }
     }
 }
