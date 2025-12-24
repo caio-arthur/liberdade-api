@@ -30,7 +30,7 @@ namespace Infrastructure.Services
         public async Task<List<FeriadoNacionalDto>> GetFeriadosNacionaisPorEstadoUfEAno(string uf, int ano, CancellationToken cancellationToken = default)
         {
             var feriadosExistentes = await _context.FeriadosNacionais
-                .Where(f => f.Uf == uf && f.Data.Year == ano)
+                .Where(f => f.Uf == uf && f.Data.Year == ano && f.Tipo != "facultativo")
                 .AsNoTracking() 
                 .ToListAsync(cancellationToken); 
 
@@ -53,14 +53,15 @@ namespace Infrastructure.Services
 
             foreach (var f in entidadesFeriados)
             {
-                f.Uf = uf; 
+                f.Uf = uf;
             }
 
             _context.FeriadosNacionais.AddRange(entidadesFeriados);
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            return feriadosDto;
+            // Retorna os feriados obtidos da API, exceto facultativos
+            return [.. feriadosDto.Where(f => f.Tipo != "facultativo")];
         }
 
         public async Task<bool> EhDiaUtilAsync(DateTime data, string uf, CancellationToken cancellationToken = default)
