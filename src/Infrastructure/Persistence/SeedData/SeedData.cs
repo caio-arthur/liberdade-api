@@ -1,11 +1,53 @@
 using Core.Entities;
 using Core.Enums;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Persistence.SeedData
 {
     public static class SeedData
     {
-        public static void Seed(LiberdadeDbContext context)
+        public static async Task SeedAsync(LiberdadeDbContext context, UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        {
+            await SeedIdentityAsync(userManager, roleManager, configuration);
+            SeedDomain(context);
+        }
+
+        private static async Task SeedIdentityAsync(UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        {
+            // Seed Role
+            if (!await roleManager.RoleExistsAsync("admin"))
+            {
+                await roleManager.CreateAsync(new IdentityRole("admin"));
+            }
+
+            // Seed User
+            if (!userManager.Users.Any())
+            {
+                var email = configuration["Admin:Username"] ?? "admin@liberdade.com";
+                var password = configuration["Admin:Password"] ?? "Admin@123";
+
+                var user = new IdentityUser
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true
+                };
+
+                var result = await userManager.CreateAsync(user, password);
+
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(user, "admin");
+                }
+                else
+                {
+                    throw new Exception($"Falha ao criar usurio admin: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                }
+            }
+        }
+
+        private static void SeedDomain(LiberdadeDbContext context)
         {
             if (!context.Ativos.Any())
             {
@@ -13,7 +55,7 @@ namespace Infrastructure.Persistence.SeedData
                     new Ativo { Codigo = "BRSTNCLF1RU6", Nome = "Tesouro Selic 2031", Categoria = AtivoCategoria.RendaFixaLiquidez, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "RBRR11", Nome = "FII RBR Rendimento High Grade", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "CPTS11", Nome = "Capitania Securities II", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
-                    new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobili�rios", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobilirios", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "XPML11", Nome = "XP Malls", Categoria = AtivoCategoria.FiiTijoloShopping, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "VISC11", Nome = "Vinci Shopping Centers", Categoria = AtivoCategoria.FiiTijoloShopping, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "HGLG11", Nome = "PATRIA LOG", Categoria = AtivoCategoria.FiiTijoloLogistica, AtualizadoEm = DateTime.MinValue },

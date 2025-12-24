@@ -1,12 +1,15 @@
 using Application.Handlers.Rotinas.Commands;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
 namespace API.Controllers
 {
+    [Authorize]
     [Route("api/rotinas")]
     public class RotinasController : ApiControllerBase
     {
+        
         [HttpPost("atualizar-mercado")]
         public async Task<ActionResult> AtualizarMercado()
         {
@@ -14,6 +17,7 @@ namespace API.Controllers
             return Ok(new { Message = "Rotina de atualização de mercado executada com sucesso." });
         }
 
+        
         [HttpPost("diario-financeiro")]
         public async Task<ActionResult> DiarioFinanceiro()
         {

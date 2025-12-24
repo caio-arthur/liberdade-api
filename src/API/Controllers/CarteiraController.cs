@@ -10,11 +10,13 @@ using Application.Handlers.Previsoes.Responses;
 using Application.Handlers.Recomendacoes.Queries;
 using Application.Handlers.Recomendacoes.Responses;
 using Gridify;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
 namespace API.Controllers
 {
+    [Authorize]
     [Route("api/carteira")]
     [ApiController]
     public class CarteiraController : ApiControllerBase

@@ -112,3 +112,8 @@ dotnet run --project src/API
 ```
 4. Acesse o Swagger em:
 https://localhost:8080/swagger 
+
+## Migrações de Banco de Dados
+
+- Para aplicar migrações do Entity Framework Core, utilize o seguinte comando:
+  dotnet ef migrations add "Example" -p src/Infrastructure -s src/API -o Migrations

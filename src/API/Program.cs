@@ -1,17 +1,27 @@
 using API.ExceptionHandlers;
 using API.Workers;
 using Application;
+using Application.Common.DTOs;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Translation.V2;
 using Infrastructure;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.SeedData;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.IO;
+using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +29,41 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Auth Configuration
+builder.Services.AddIdentityApiEndpoints<IdentityUser>()
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<LiberdadeDbContext>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy => policy
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+});
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:Key"]);
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = false,
+        ValidateAudience = false
+    };
+});
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddHostedService<DiarioFinanceiroWorker>();
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -40,8 +85,8 @@ var googleCredentialPath = builder.Configuration["GoogleCloud:GoogleCredentialPa
 if (string.IsNullOrEmpty(googleCredentialPath) || !File.Exists(googleCredentialPath))
 {
     throw new FileNotFoundException(
-            $"CRÕTICO: O arquivo de credenciais do Google n„o foi encontrado. " +
-            $"Verifique se a configuraÁ„o 'GoogleCloud' aponta para um arquivo v·lido. " +
+            $"CR√çTICO: O arquivo de credenciais do Google n√£o foi encontrado. " +
+            $"Verifique se a configura√ß√£o 'GoogleCloud' aponta para um arquivo v√°lido. " +
             $"Caminho tentado: '{googleCredentialPath}'");
 }
 
@@ -63,6 +108,7 @@ builder.Services.AddProblemDetails();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseCors("AllowAll");
 
 // Migrate and Seed the database
 using (var scope = app.Services.CreateScope())
@@ -71,14 +117,20 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<LiberdadeDbContext>();
+        var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+        var config = services.GetRequiredService<IConfiguration>();
+
         context.Database.Migrate();
-        SeedData.Seed(context);
+        await SeedData.SeedAsync(context, userManager, roleManager, config);
     }
     catch (Exception ex)
     {
-        throw new Exception("Ocorreu um erro no processo de migraÁ„o ou seeding do database.", ex);
+        throw new Exception("Ocorreu um erro no processo de migra√ß√£o ou seeding do database.", ex);
     }
 }
+
+app.UseAuthorization();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -91,3 +143,4 @@ app.UseHttpsRedirection();
 app.MapControllers();
 
 app.Run();
+
