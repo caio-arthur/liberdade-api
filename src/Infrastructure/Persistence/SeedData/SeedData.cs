@@ -1,11 +1,53 @@
 using Core.Entities;
 using Core.Enums;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Persistence.SeedData
 {
     public static class SeedData
     {
-        public static void Seed(LiberdadeDbContext context)
+        public static async Task SeedAsync(LiberdadeDbContext context, UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        {
+            await SeedIdentityAsync(userManager, roleManager, configuration);
+            SeedDomain(context);
+        }
+
+        private static async Task SeedIdentityAsync(UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        {
+            // Seed Role
+            if (!await roleManager.RoleExistsAsync("admin"))
+            {
+                await roleManager.CreateAsync(new IdentityRole("admin"));
+            }
+
+            // Seed User
+            if (!userManager.Users.Any())
+            {
+                var email = configuration["Admin:Username"] ?? "admin@liberdade.com";
+                var password = configuration["Admin:Password"] ?? "Admin@123";
+
+                var user = new IdentityUser
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true
+                };
+
+                var result = await userManager.CreateAsync(user, password);
+
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(user, "admin");
+                }
+                else
+                {
+                    throw new Exception($"Falha ao criar usurio admin: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                }
+            }
+        }
+
+        private static void SeedDomain(LiberdadeDbContext context)
         {
             if (!context.Ativos.Any())
             {
@@ -13,7 +55,7 @@ namespace Infrastructure.Persistence.SeedData
                     new Ativo { Codigo = "BRSTNCLF1RU6", Nome = "Tesouro Selic 2031", Categoria = AtivoCategoria.RendaFixaLiquidez, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "RBRR11", Nome = "FII RBR Rendimento High Grade", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "CPTS11", Nome = "Capitania Securities II", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
-                    new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobili�rios", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
+                    new Ativo { Codigo = "KNCR11", Nome = "Kinea Rendimentos Imobilirios", Categoria = AtivoCategoria.FiiPapel, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "XPML11", Nome = "XP Malls", Categoria = AtivoCategoria.FiiTijoloShopping, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "VISC11", Nome = "Vinci Shopping Centers", Categoria = AtivoCategoria.FiiTijoloShopping, AtualizadoEm = DateTime.MinValue },
                     new Ativo { Codigo = "HGLG11", Nome = "PATRIA LOG", Categoria = AtivoCategoria.FiiTijoloLogistica, AtualizadoEm = DateTime.MinValue },
@@ -42,7 +84,8 @@ namespace Infrastructure.Persistence.SeedData
             {
                 var ativoSelic2031 = context.Ativos.First(a => a.Codigo == "BRSTNCLF1RU6");
 
-                context.Transacoes.AddRange(
+                var transacoes = new[]
+                {
                     new Transacao
                     {
                         AtivoId = ativoSelic2031.Id,
@@ -92,8 +135,51 @@ namespace Infrastructure.Persistence.SeedData
                         ValorTotal = 713.2092m,
                         Data = new DateTime(2025, 12, 05),
                         Observacoes = "Compra de SELIC2031"
+                    },
+                    new Transacao
+                    {
+                        AtivoId = ativoSelic2031.Id,
+                        TipoTransacao = TransacaoTipo.Compra,
+                        Quantidade = 0.05m,
+                        PrecoUnitario = 17942.34m,
+                        ValorTotal = 897.11m,
+                        Data = new DateTime(2025, 12, 22),
+                        Observacoes = "Compra de SELIC2031"
                     }
-                );
+                };
+
+                foreach (var transacao in transacoes)
+                {
+                    context.Transacoes.Add(transacao);
+
+                    var posicao = context.PosicaoCarteiras.Local.FirstOrDefault(p => p.AtivoId == transacao.AtivoId) 
+                                  ?? context.PosicaoCarteiras.FirstOrDefault(p => p.AtivoId == transacao.AtivoId);
+
+                    if (posicao == null)
+                    {
+                        posicao = new PosicaoCarteira
+                        {
+                            AtivoId = (Guid)transacao.AtivoId,
+                            Codigo = ativoSelic2031.Codigo,
+                            Categoria = ativoSelic2031.Categoria,
+                            Quantidade = transacao.Quantidade,
+                            PrecoMedio = transacao.PrecoUnitario,
+                            PrecoAtual = ativoSelic2031.PrecoAtual
+                        };
+                        context.PosicaoCarteiras.Add(posicao);
+                    }
+                    else
+                    {
+                        var totalAtual = posicao.Quantidade * posicao.PrecoMedio;
+                        var totalCompra = transacao.Quantidade * transacao.PrecoUnitario;
+                        var novaQuantidade = posicao.Quantidade + transacao.Quantidade;
+
+                        posicao.PrecoMedio = (totalAtual + totalCompra) / novaQuantidade;
+                        posicao.Quantidade = novaQuantidade;
+                    }
+                }
+
+                context.SaveChanges();
             }
         }
     }

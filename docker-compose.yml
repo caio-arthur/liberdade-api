@@ -14,4 +14,8 @@ services:
       - NtfySettings__DefaultTopic=${NTFY_TOPIC}
       - OpenRouter__ApiKey=${OPENROUTER_KEY}
       - ApiInvertexto__Key=${INVERTEXTO_KEY}
+      - Admin__Username=${ADMIN_USERNAME}
+      - Admin__Password=${ADMIN_PASSWORD}
+      - Jwt__Key=${JWT_KEY}
       - GoogleCloud__GoogleCredentialPath=/app/secrets/google-credentials.json
+ 
