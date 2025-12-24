@@ -75,21 +75,21 @@ namespace Application.Handlers.Rotinas.Commands
                         }
                     }
                 }
-                else if (ehFii)
-                {
-                    var dadosFii = await _marketService.ObterDadosFiiAsync(ativo.Codigo);
-                    if (dadosFii.HasValue)
-                    {
-                        novoPreco = dadosFii.Value.Preco;
-                        dataReferenciaPreco = DateTime.UtcNow;
+                //else if (ehFii)
+                //{
+                //    var dadosFii = await _marketService.ObterDadosFiiAsync(ativo.Codigo);
+                //    if (dadosFii.HasValue)
+                //    {
+                //        novoPreco = dadosFii.Value.Preco;
+                //        dataReferenciaPreco = DateTime.UtcNow;
 
-                        ativo.RendimentoValorMesAnterior = dadosFii.Value.UltimoRendimento;
-                        precisaSalvar = true;
+                //        ativo.RendimentoValorMesAnterior = dadosFii.Value.UltimoRendimento;
+                //        precisaSalvar = true;
 
-                        if (novoPreco > 0)
-                            ativo.PercentualDeRetornoMensalEsperado = (ativo.RendimentoValorMesAnterior / novoPreco.Value) * 100;
-                    }
-                }
+                //        if (novoPreco > 0)
+                //            ativo.PercentualDeRetornoMensalEsperado = (ativo.RendimentoValorMesAnterior / novoPreco.Value) * 100;
+                //    }
+                //}
 
                 // Se encontrou preço novo, atualiza
                 if (novoPreco.HasValue && novoPreco.Value > 0)
