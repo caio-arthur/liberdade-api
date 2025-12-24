@@ -1,0 +1,42 @@
+name: Deploy Liberdade API
+
+on:
+  push:
+    branches: [ "main" ]
+    # Dispara apenas quando houver código novo na main (merge da develop)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: Copiar arquivos para o Servidor
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "."
+          target: "/root/apps/liberdade"
+          # IMPORTANTE: rm: false impede que ele apague o arquivo .env e a pasta secrets que criamos manualmente
+          rm: false 
+
+      - name: Executar Deploy Remoto
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /root/apps/liberdade
+            
+            # Derruba, Recompila e Sobe (Zero downtime relativo, pois recria container rápido)
+            docker compose down
+            docker compose up -d --build --remove-orphans
+            
+            # Remove imagens antigas para não lotar o disco
+            docker image prune -f
