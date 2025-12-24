@@ -1,0 +1,17 @@
+name: Branch Guard
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        if: github.head_ref != 'develop'
+        run: |
+          echo "ERRO: A branch 'main' aceita PRs apenas da branch 'develop'."
+          echo "Você está tentando fazer merge a partir de: ${{ github.head_ref }}"
+          exit 1
